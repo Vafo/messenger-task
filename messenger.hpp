@@ -86,6 +86,8 @@ std::vector<uint8_t> make_buff(const msg_t & msg);
 */
 msg_t parse_buff(std::vector<uint8_t> & buff);
 
+void test_struct();
+
 }	// namespace messenger
 
 #endif // !TASK1_MESSENGER_HPP

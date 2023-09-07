@@ -1,0 +1,7 @@
+[x] Read about endianness
+    - It is about order of bytes in multi-byte object.
+      Big endian has Most Significant Byte at lowest address
+      Little endian hast Least Significant Byte at lowest address
+[ ] Read about CRC calculation of byte stream. (Clarify on Reflection and Endianness of stream)
+
+[ ] Remake Makefile to be just one-liner
