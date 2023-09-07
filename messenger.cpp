@@ -2,9 +2,20 @@
 #include <bitset>
 
 #include "messenger.hpp"
-#include "crc4.hpp"
+#include "util.hpp"
+
+#define MASK_FIRST_N(n) (( 1 << (n) ) -  1)
+
+#define DEF_TO_STR(def) #def
+#define MIN(a, b) ( ((a) < (b)) ? (a) : (b) )
+#define ARR_LEN(arr) ((sizeof(arr)) / sizeof(arr[0]))
+
+#define BITS_PER_BYTE 8
 
 #define BITS_TO_RANGE(num_bits) (((1 << ((num_bits) - 1)) - 1) | (1 << ((num_bits) - 1)))
+
+
+#define FLAG_BITS 0x5
 
 #define MSGR_FLAG_BITS 3
 #define MSGR_FLAG_MAX BITS_TO_RANGE(MSGR_FLAG_BITS)
@@ -19,13 +30,6 @@
 #define MSGR_CRC4_MAX BITS_TO_RANGE(MSGR_CRC4_BITS)
 
 // Valid range 1 - 31
-#define MASK_FIRST_N(n) (( 1 << (n) ) -  1)
-
-#define DEF_TO_STR(def) #def
-#define MIN(a, b) ( ((a) < (b)) ? (a) : (b) )
-#define ARR_LEN(arr) ((sizeof(arr)) / sizeof(arr[0]))
-
-#define BITS_PER_BYTE 8
 
 // Should endianness be considered?
 // Is it guaranteed that bits will be placed from least to most significant?
@@ -61,6 +65,15 @@ namespace messenger
 
         public:
 
+        msg_hdr_t() {}
+
+        msg_hdr_t(uint8_t fg, uint8_t nl, uint8_t ml, uint8_t c4 = 0) {
+            this->set_flag(fg);
+            this->set_name_len(nl);
+            this->set_msg_len(ml);
+            this->set_crc4(c4);
+        }
+
         // TODO Learn about inline and qualify small funcs
         void set_flag(uint8_t flag) {
             this->first.flag = flag;
@@ -79,6 +92,7 @@ namespace messenger
         }
 
         void set_msg_len(uint8_t msg_len) {
+            std::cout << "MSGLEN " << static_cast<unsigned>(msg_len) << std::endl;
             uint8_t res = msg_len & MASK_FIRST_N(MSGR_MSG_LEN_BITS);
             this->first.msg_len_lsb = res & 1;
             this->second.msg_len_rest = res >> 1;
@@ -98,62 +112,23 @@ namespace messenger
             return this->second.crc4;
         }
 
-        // uint8_t calculate_crc4() {
-        //     uint16_t check = this->to_uint16();
-        //     check &= MSGR_CRC4_MAX << 
-        //     return util::crc4(0, check, 12);
-        // }
+        // Calculates crc4, replacing crc4 bits with zeroes
+        uint8_t calculate_crc4() { // Might rename to simple - crc4
+            uint8_t res = 0;
+            // Not safe in case of concurrent access
+            uint8_t tmp_crc4 = this->get_crc4();
 
-        uint16_t to_uint16() {
-            uint16_t res;
-            res |= *reinterpret_cast<uint8_t *>(&this->second);
-            res <<= BITS_PER_BYTE;
-            res |= *reinterpret_cast<uint8_t *>(&this->first);
+            uint8_t *beg = reinterpret_cast<uint8_t *>(this);
+            uint8_t *end = beg + sizeof(*this);
+            while(beg < end) {
+                res = util::crc4(res, *beg++, BITS_PER_BYTE);
+            }
+
+            this->set_crc4(tmp_crc4);
+
             return res;
         }
     };
-
-    void test_struct() {
-        // msg_hdr_t kek = {
-        //     .bits = {
-        //         .flag = 4,
-        //         .name = 10,
-        //         .msg_len = 3,
-        //         .crc4 = 1
-        //     }
-        // };
-
-        msg_hdr_t kek;
-        kek.set_flag(3);
-        kek.set_name_len(10);
-        kek.set_msg_len(3);
-        kek.set_crc4(1);
-
-        uint8_t *beg = reinterpret_cast<uint8_t *>(&kek);
-        uint8_t *end = beg + sizeof(kek);
-        
-        while(beg != end) {
-            std::cout << std::hex << static_cast<unsigned>(*beg) << ' ';
-            beg++;
-        }
-        
-        std::cout << std::endl;
-        std::cout << std::dec;
-
-        uint8_t res = kek.calculate_crc4();
-        std::cout << "CRC4 custom " << static_cast<unsigned>(res) << std::endl;
-        
-        res = 0;
-        res = util::crc4(res, kek.get_msg_len(), MSGR_MSG_LEN_BITS);
-        res = util::crc4(res, kek.get_name_len(), MSGR_NAME_LEN_BITS);
-        res = util::crc4(res, kek.get_flag(), MSGR_FLAG_BITS);
-        std::cout << "CRC4 handmade " << static_cast<unsigned>(res) << std::endl;
-
-        // for(size_t i = 0; i < ARR_LEN(kek.raw); i++) {
-        //     std::cout << std::hex << static_cast<unsigned>(kek.raw[i])  << ' ';
-        // }
-        // std::cout << std::endl;
-    }
 
     std::vector<uint8_t> make_buff(const msg_t & msg) {
         if(msg.name.empty()) {
@@ -173,29 +148,48 @@ namespace messenger
         std::string::size_type msg_text_len = msg.text.size();
         std::string::size_type msg_text_offset = 0;
         std::string::size_type msg_text_offset_end = -1;
+        std::vector<uint8_t>::size_type header_offset = 0;
         int packet_text_len = 0;
         uint8_t crc4_res = 0;
         while(msg_text_len > 0) {
+            packet_text_len = MIN(msg_text_len, MSGR_MSG_LEN_MAX);
+
             // Header part of packet
-            msg_hdr_t header;
+            msg_hdr_t header(FLAG_BITS, msg.name.size(), packet_text_len);
+            crc4_res = header.calculate_crc4();
+            header_offset = res.size();
             res.resize(res.size() + sizeof(header));
 
             // Sender (?) Name part of packet
             for(std::string::size_type i = 0; i < msg.name.size(); i++) {
-                crc4_res = util::crc4(crc4_res, msg.name[i], BITS_PER_BYTE);
-                res.push_back(msg.name[i]);
+                std::string::value_type val = msg.name[i];
+                crc4_res = util::crc4(crc4_res, val, BITS_PER_BYTE);
+                res.push_back( static_cast<uint8_t>(val) );
             }
-            // Text part of packet
-            packet_text_len = MIN(msg_text_len, MSGR_MSG_LEN_MAX);
 
+            // Text part of packet
             for(msg_text_offset_end = msg_text_offset + packet_text_len ; 
                 msg_text_offset < msg_text_offset_end;
                 msg_text_offset++ ) {
-                res.push_back( static_cast<uint8_t>(msg.text[msg_text_offset]) );
+                std::string::value_type val = msg.text[msg_text_offset];
+                crc4_res = util::crc4(crc4_res, val, BITS_PER_BYTE);
+                res.push_back( static_cast<uint8_t>(val) );
             }
-
+            
+            // Place header into packet with calculated crc4
+            header.set_crc4(crc4_res);
+            
+            uint8_t *hdr_beg_ptr = reinterpret_cast<uint8_t *>(&header);
+            uint8_t *hdr_end_ptr = hdr_beg_ptr + sizeof(header);
+            if(util::isLittleEndian()) {
+                std::copy(hdr_beg_ptr, hdr_end_ptr, res.begin() + header_offset);
+            } else {
+                std::copy_backward(hdr_beg_ptr, hdr_end_ptr, res.begin() + header_offset);
+            }
+            
             msg_text_len -= packet_text_len;
         }
 
+        return res;
     }
 }
