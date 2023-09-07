@@ -1,4 +1,4 @@
-#include "crc4.hpp"
+#include "util.hpp"
 
 namespace messenger::util {
     static const uint8_t crc4_tab[] = {

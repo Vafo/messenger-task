@@ -2,8 +2,8 @@
 /*
  * crc4.c - simple crc-4 calculations.
  */
-#ifndef MESSENGER_CRC4_H
-#define MESSENGER_CRC4_H
+#ifndef MESSENGER_UTIL_H
+#define MESSENGER_UTIL_H
 
 #include <cstdint>
 
@@ -22,6 +22,12 @@ namespace messenger::util {
      */
     uint8_t crc4(uint8_t c, uint64_t x, int bits);
     
+    // Checks if machine is Little Endian
+    inline bool isLittleEndian() {
+        short int number = 0x1;
+        char *numPtr = (char*)&number;
+        return (numPtr[0] == 1);
+    }
 }
 
 #endif
