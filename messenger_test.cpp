@@ -5,7 +5,7 @@
 
 
 int main() {
-    messenger::msg_t msg("Vafo", "HELO EVERDAIANE!!1");
+    messenger::msg_t msg("Vafo", "HELO EVERDAIANE!!1 dwam jdwn aknwkjan dknaw ndkjanw kj nwa");
     std::vector<uint8_t> buff = messenger::make_buff(msg);
 
     std::cout << std::hex;

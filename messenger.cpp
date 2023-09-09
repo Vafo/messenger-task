@@ -116,7 +116,7 @@ namespace messenger
             uint8_t res = 0;
             // Not safe in case of concurrent access
             uint8_t tmp_crc4 = this->get_crc4();
-
+            this->set_crc4(0);
             uint8_t *beg = reinterpret_cast<uint8_t *>(this);
             uint8_t *end = beg + sizeof(*this);
             while(beg < end) {
@@ -150,8 +150,8 @@ namespace messenger
         std::string::size_type msg_text_offset_end = -1;
         std::vector<uint8_t>::size_type header_offset = 0;
         int packet_text_len = 0;
-        uint8_t crc4_res = 0;
         while(msg_text_len > 0) {
+            uint8_t crc4_res = 0;
             packet_text_len = MIN(msg_text_len, MSGR_MSG_LEN_MAX);
 
             // Header part of packet
@@ -214,7 +214,9 @@ namespace messenger
             if(util::isLittleEndian()) {
                 std::copy(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
             } else {
-                std::copy_backward(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
+                // It does not flip endiannes, it just changes start of copy procedure
+                // std::copy_backward(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
+                throw std::runtime_error("Big endian conversion is required");
             }
             cur_iter += sizeof(header);
 
@@ -227,17 +229,17 @@ namespace messenger
             std::cout << "GET CRC4 " << static_cast<unsigned>(crc4_packet) << std::endl;
 
             uint8_t crc4_real = header.calculate_crc4();
-            std::vector<uint8_t>::size_type remaining_bits = header.get_name_len(); // Casts to size_type
-            remaining_bits += header.get_msg_len();
-            std::cout << "REMAINING BITS " << remaining_bits << std::endl;
+            std::vector<uint8_t>::size_type remaining_bytes = header.get_name_len(); // Casts to size_type
+            remaining_bytes += header.get_msg_len();
+            std::cout << "REMAINING BYTES " << remaining_bytes << std::endl;
 
             // Check if the lengths correspond to actual size of buffer
-            if(remaining_bits > (buff.end() - cur_iter)) {
+            if(remaining_bytes > (buff.end() - cur_iter)) {
                 throw std::runtime_error("Invalid name_len / msg_len fields");
             }
 
             for(std::vector<uint8_t>::iterator crc4_iter = cur_iter;
-                crc4_iter != cur_iter + remaining_bits; crc4_iter++) {
+                crc4_iter != cur_iter + remaining_bytes; crc4_iter++) {
                 crc4_real = util::crc4(crc4_real, *crc4_iter, BITS_PER_BYTE);
             }
 
@@ -248,8 +250,7 @@ namespace messenger
             }
 
             // Copy name
-            std::string tmp_str;
-            std::copy(cur_iter, cur_iter + header.get_name_len(), tmp_str.end());
+            std::string tmp_str(cur_iter, cur_iter + header.get_name_len()); // can be done with ostream_iterator
             
             if(msg_name == "") {
                 msg_name = std::move(tmp_str);
