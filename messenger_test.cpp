@@ -5,7 +5,7 @@
 
 
 int main() {
-    messenger::msg_t msg("Vafo", "HELO EVERIANE!!11 MY NAME SDK NJADNK WAN DKJWNAKJDNWAKJNDKJWAN KDNAW KJNDWK JANKNAKJWD");
+    messenger::msg_t msg("Vafo", "HELO EVERDAIANE!!1");
     std::vector<uint8_t> buff = messenger::make_buff(msg);
 
     std::cout << std::hex;
@@ -23,6 +23,11 @@ int main() {
         std::cout << *iter;
     }
     std::cout << std::endl;
+
+    messenger::msg_t parsed = messenger::parse_buff(buff);
+
+    std::cout << "Name : " << parsed.name << std::endl;
+    std::cout << "Text : " << parsed.text << std::endl;
 
 
     return 0;

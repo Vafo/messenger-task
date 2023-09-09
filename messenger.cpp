@@ -92,7 +92,6 @@ namespace messenger
         }
 
         void set_msg_len(uint8_t msg_len) {
-            std::cout << "MSGLEN " << static_cast<unsigned>(msg_len) << std::endl;
             uint8_t res = msg_len & MASK_FIRST_N(MSGR_MSG_LEN_BITS);
             this->first.msg_len_lsb = res & 1;
             this->second.msg_len_rest = res >> 1;
@@ -130,6 +129,7 @@ namespace messenger
         }
     };
 
+
     std::vector<uint8_t> make_buff(const msg_t & msg) {
         if(msg.name.empty()) {
             throw std::length_error("Message name is empty");
@@ -156,6 +156,7 @@ namespace messenger
 
             // Header part of packet
             msg_hdr_t header(FLAG_BITS, msg.name.size(), packet_text_len);
+            std::cout << "ORIG NL " << (unsigned) header.get_name_len() << " ML " << (unsigned) header.get_msg_len() << std::endl;
             crc4_res = header.calculate_crc4();
             header_offset = res.size();
             res.resize(res.size() + sizeof(header));
@@ -178,7 +179,8 @@ namespace messenger
             
             // Place header into packet with calculated crc4
             header.set_crc4(crc4_res);
-            
+            std::cout << "SET CRC4 " << static_cast<unsigned>(header.get_crc4()) << std::endl;
+
             uint8_t *hdr_beg_ptr = reinterpret_cast<uint8_t *>(&header);
             uint8_t *hdr_end_ptr = hdr_beg_ptr + sizeof(header);
             if(util::isLittleEndian()) {
@@ -192,4 +194,78 @@ namespace messenger
 
         return res;
     }
+
+
+    msg_t parse_buff(std::vector<uint8_t> & buff) {
+        std::string msg_name;
+        std::string msg_text;
+        
+        msg_hdr_t header;
+        uint8_t *hdr_beg_ptr = reinterpret_cast<uint8_t *>(&header);
+        
+        if( buff.size() < 2 ) {
+            throw std::runtime_error("Buffer does not contain bytes for header (at least 2)");
+        }
+
+        // Parse every packet
+        std::vector<uint8_t>::iterator cur_iter = buff.begin();
+        while(cur_iter != buff.end()) {
+            // Copy to struct according to endianness. Byte with flag comes first
+            if(util::isLittleEndian()) {
+                std::copy(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
+            } else {
+                std::copy_backward(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
+            }
+            cur_iter += sizeof(header);
+
+            // Check if flag is valid
+            if (header.get_flag() != FLAG_BITS)
+            {
+                throw std::runtime_error("Flag bit is not valid");
+            }
+            uint8_t crc4_packet = header.get_crc4();
+            std::cout << "GET CRC4 " << static_cast<unsigned>(crc4_packet) << std::endl;
+
+            uint8_t crc4_real = header.calculate_crc4();
+            std::vector<uint8_t>::size_type remaining_bits = header.get_name_len(); // Casts to size_type
+            remaining_bits += header.get_msg_len();
+            std::cout << "REMAINING BITS " << remaining_bits << std::endl;
+
+            // Check if the lengths correspond to actual size of buffer
+            if(remaining_bits > (buff.end() - cur_iter)) {
+                throw std::runtime_error("Invalid name_len / msg_len fields");
+            }
+
+            for(std::vector<uint8_t>::iterator crc4_iter = cur_iter;
+                crc4_iter != cur_iter + remaining_bits; crc4_iter++) {
+                crc4_real = util::crc4(crc4_real, *crc4_iter, BITS_PER_BYTE);
+            }
+
+            std::cout << "CALC CRC4 " << static_cast<unsigned>(crc4_real) << std::endl;
+
+            if(crc4_real != crc4_packet) {
+                throw std::runtime_error("Invalid CRC4");
+            }
+
+            // Copy name
+            std::string tmp_str;
+            std::copy(cur_iter, cur_iter + header.get_name_len(), tmp_str.end());
+            
+            if(msg_name == "") {
+                msg_name = std::move(tmp_str);
+            } else if(msg_name != tmp_str) {
+                throw std::runtime_error("Sender names do not match accross packets");
+            }
+
+            cur_iter += header.get_name_len();
+            std::vector<uint8_t>::iterator msg_txt_iter_end = cur_iter + header.get_msg_len();
+            // Copy message text
+            while(cur_iter != msg_txt_iter_end)
+                msg_text += *cur_iter++; // Not sure if there is better way to do this
+            
+        }
+
+        return msg_t(msg_name, msg_text);
+    }
+
 }
