@@ -1,4 +1,9 @@
-src ?= 
+# Hardcoded SRCS
+src := \
+	messenger_test.cpp \
+	messenger.cpp \
+	util.cpp
+
 TARGET := messenger_app
 
 run:
