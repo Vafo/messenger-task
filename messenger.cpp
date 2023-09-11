@@ -200,11 +200,14 @@ namespace messenger
         return res;
     }
 
-
+    // Function is not recoverable.
+    // Once discrepancy is found, previously parsed packets can not be retrieved
+    // Could consider providing valid packets 
     msg_t parse_buff(std::vector<uint8_t> & buff) {
         std::string msg_name;
         std::string msg_text;
-        
+        bool is_name_retrieved = false;
+
         msg_hdr_t header;
         uint8_t * const hdr_beg_ptr = reinterpret_cast<uint8_t *>(&header); // Pointer, used to fill header from buffer
         
@@ -235,12 +238,20 @@ namespace messenger
             uint8_t crc4_packet = header.get_crc4(); // CRC4 retrieved from packet
             uint8_t crc4_real = header.calculate_crc4(); // CRC4 calculated from packet
 
+            // Check if name & msg bits are valid.
+            if(header.get_name_len() == 0) {
+                throw std::runtime_error("NAME_LEN bits are empty");
+            }
+
+            if(header.get_msg_len() == 0) {
+                throw std::runtime_error("MSG_LEN bits are empty");
+            }
+
             // Retreive remaining bytes within packet
-            // FIX: Check lengths of NAME and MSG. They should be non-zero
             std::vector<uint8_t>::size_type remaining_bytes = header.get_name_len(); // Casts to size_type
             remaining_bytes += header.get_msg_len();
 
-            // Check if the lengths correspond to actual size of buffer
+            // Check if the remaining bytes of packet do not exceed actual size of buffer
             if(remaining_bytes > (buff.end() - cur_iter)) {
                 throw std::runtime_error("Invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
             }
@@ -259,9 +270,9 @@ namespace messenger
             std::string tmp_str(cur_iter, cur_iter + header.get_name_len()); // can be done with ostream_iterator
 
             // Check if name persists across packets
-            // Using flag variable would be much safer and counter "empty" name    
-            if(msg_name == "") {
+            if(!is_name_retrieved) {
                 msg_name = std::move(tmp_str);
+                is_name_retrieved = true;
             } else if(msg_name != tmp_str) {
                 throw std::runtime_error("Sender names do not match accross packets");
             }
