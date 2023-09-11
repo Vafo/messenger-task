@@ -10,6 +10,7 @@ int main() {
 
     std::cout << std::hex;
 
+    // Byte content of message
     for(std::vector<uint8_t>::iterator iter = buff.begin();
         iter != buff.end(); iter++) {
         std::cout << static_cast<unsigned>(*iter) << " ";
@@ -18,6 +19,7 @@ int main() {
     std::cout << std::dec;
     std::cout << std::endl;
 
+    // Char content of message
     for(std::vector<uint8_t>::iterator iter = buff.begin();
         iter != buff.end(); iter++) {
         std::cout << *iter;
