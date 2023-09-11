@@ -6,8 +6,10 @@ src := \
 
 TARGET := messenger_app
 
+CC := g++
+
 run:
-	g++ $(src) -o $(TARGET)
+	$(CC) $(src) -o $(TARGET)
 	./$(TARGET)
 
 clean:
