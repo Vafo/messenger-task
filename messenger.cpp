@@ -41,55 +41,6 @@ namespace messenger {
 // namespace detail declaration
 namespace detail {
 
-class msg_hdr_t {
-// Should namespace or class be used for very small funcs?
-public:
-    typedef uint8_t raw_type[2];
-private:
-    raw_type m_hdr; // Should it really be private?
-public:
-
-    msg_hdr_t(): m_hdr() { } // Will it fill m_hdr (array type) with zeroes?
-
-    msg_hdr_t(uint8_t flag, uint8_t name_len, uint8_t msg_len) {
-        this->set_flag(flag);
-        this->set_name_len(name_len);
-        this->set_msg_len(msg_len);
-    }
-
-    uint8_t *begin();
-
-    uint8_t *end();
-
-    // Set flag bits of header
-    inline void set_flag(uint8_t flag);
-
-    // Get flag bits of header
-    inline uint8_t get_flag();
-
-    // Set name_len bits of header
-    inline void set_name_len(uint8_t name_len);
-
-    // Get name_len bits of header
-    inline uint8_t get_name_len();
-
-    // Set msg_len bits of header
-    inline void set_msg_len(uint8_t msg_len);
-
-    // Get msg_len bits of header
-    inline uint8_t get_msg_len();
-
-    // Set crc4 bits of header
-    inline void set_crc4(uint8_t crc4_val);
-
-    // Get crc4 bits of header
-    inline uint8_t get_crc4();
-
-    // Calculate crc4 of packet masking crc4 bits with zeroes (might consider revision)
-    inline uint8_t calculate_crc4();
-
-};
-
 // Push sequentially single packet from stream of text 
 std::string::const_iterator push_single_packet (
     const std::string &name, 
@@ -99,6 +50,7 @@ std::string::const_iterator push_single_packet (
 );
 
 } // namespace detail
+
 
 std::vector<uint8_t> make_buff(const msg_t & msg) {
     if(msg.name.empty()) throw std::length_error("messenger: sender's name is empty");
@@ -212,77 +164,95 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
 */
 namespace detail {
 
-uint8_t *msg_hdr_t::begin() {
-    return reinterpret_cast<uint8_t *>(&this->m_hdr);
-}
+class msg_hdr_t {
+// Should namespace or class be used for very small funcs?
+public:
+    typedef uint8_t raw_type[2];
+private:
+    raw_type m_hdr; // Should it really be private?
+public:
 
-uint8_t *msg_hdr_t::end() {
-    return reinterpret_cast<uint8_t *>(&this->m_hdr) + sizeof(this->m_hdr);
-}
+    msg_hdr_t(): m_hdr() { } // Will it fill m_hdr (array type) with zeroes?
 
-// Set flag bits of header
-inline void msg_hdr_t::set_flag(uint8_t flag) {
-    this->m_hdr[0] &= ~(MASK_FIRST_N(MSGR_FLAG_BITS)); // Remove prev value of flag bits;
-    this->m_hdr[0] |= flag & MASK_FIRST_N(MSGR_FLAG_BITS);
-}
-
-// Get flag bits of header
-inline uint8_t msg_hdr_t::get_flag() {
-    return this->m_hdr[0] & MASK_FIRST_N(MSGR_FLAG_BITS);
-}
-
-// Set name_len bits of header
-inline void msg_hdr_t::set_name_len(uint8_t name_len) {
-    this->m_hdr[0] &= ~( MASK_FIRST_N(MSGR_NAME_LEN_BITS) << MSGR_FLAG_BITS );  // Remove prev value of name_len bits
-    this->m_hdr[0] |= (name_len & MASK_FIRST_N(MSGR_NAME_LEN_BITS)) << MSGR_FLAG_BITS;
-}
-
-// Get name_len bits of header
-inline uint8_t msg_hdr_t::get_name_len() {
-    return (this->m_hdr[0] >> MSGR_FLAG_BITS) & MASK_FIRST_N(MSGR_NAME_LEN_BITS);
-}
-
-// Set msg_len bits of header
-inline void msg_hdr_t::set_msg_len(uint8_t msg_len) {
-    this->m_hdr[0] &= ~(1 << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)); // Remove 1st bit of msg_len in 0th byte
-    this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1 /* exclude 1 from tot */));
-    this->m_hdr[0] |= (msg_len & 1) << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS);
-    this->m_hdr[1] |= (msg_len >> 1) & (MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1));
-}
-
-// Get msg_len bits of header
-inline uint8_t msg_hdr_t::get_msg_len() {
-    uint8_t res = (this->m_hdr[0] >> (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)) & 1;
-    return res | ((this->m_hdr[1] & MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1)) << 1)  ;
-}
-
-// Set crc4 bits of header
-inline void msg_hdr_t::set_crc4(uint8_t crc4_val) {
-    this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_CRC4_BITS) << (MSGR_MSG_LEN_BITS - 1));
-    this->m_hdr[1] |= (crc4_val & MASK_FIRST_N(MSGR_CRC4_BITS)) << (MSGR_MSG_LEN_BITS - 1);
-}
-
-// Get crc4 bits of header
-inline uint8_t msg_hdr_t::get_crc4() {
-    return (this->m_hdr[1] >> (MSGR_MSG_LEN_BITS - 1)) & MASK_FIRST_N(MSGR_CRC4_BITS);
-}
-
-// Calculate crc4 of packet masking crc4 bits with zeroes (might consider revision)
-inline uint8_t msg_hdr_t::calculate_crc4() {
-    uint8_t res = 0;
-    // Not safe in case of concurrent access
-    uint8_t tmp_crc4 = this->get_crc4();
-    this->set_crc4(0);
-    uint8_t *beg = reinterpret_cast<uint8_t *>(this->m_hdr);
-    uint8_t *end = beg + sizeof(this->m_hdr);
-    while(beg < end) {
-        res = util::crc4(res, *beg++, BITS_PER_BYTE);
+    msg_hdr_t(uint8_t flag, uint8_t name_len, uint8_t msg_len) {
+        this->set_flag(flag);
+        this->set_name_len(name_len);
+        this->set_msg_len(msg_len);
+    }
+    
+    uint8_t *begin() {
+        return reinterpret_cast<uint8_t *>(&this->m_hdr);
     }
 
-    this->set_crc4(tmp_crc4);
+    uint8_t *end() {
+        return reinterpret_cast<uint8_t *>(&this->m_hdr) + sizeof(this->m_hdr);
+    }
 
-    return res;
-}
+    // Set flag bits of header
+    inline void set_flag(uint8_t flag) {
+        this->m_hdr[0] &= ~(MASK_FIRST_N(MSGR_FLAG_BITS)); // Remove prev value of flag bits;
+        this->m_hdr[0] |= flag & MASK_FIRST_N(MSGR_FLAG_BITS);
+    }
+
+    // Get flag bits of header
+    inline uint8_t get_flag() {
+        return this->m_hdr[0] & MASK_FIRST_N(MSGR_FLAG_BITS);
+    }
+
+    // Set name_len bits of header
+    inline void set_name_len(uint8_t name_len) {
+        this->m_hdr[0] &= ~( MASK_FIRST_N(MSGR_NAME_LEN_BITS) << MSGR_FLAG_BITS );  // Remove prev value of name_len bits
+        this->m_hdr[0] |= (name_len & MASK_FIRST_N(MSGR_NAME_LEN_BITS)) << MSGR_FLAG_BITS;
+    }
+
+    // Get name_len bits of header
+    inline uint8_t get_name_len() {
+        return (this->m_hdr[0] >> MSGR_FLAG_BITS) & MASK_FIRST_N(MSGR_NAME_LEN_BITS);
+    }
+
+    // Set msg_len bits of header
+    inline void set_msg_len(uint8_t msg_len) {
+        this->m_hdr[0] &= ~(1 << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)); // Remove 1st bit of msg_len in 0th byte
+        this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1 /* exclude 1 from tot */));
+        this->m_hdr[0] |= (msg_len & 1) << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS);
+        this->m_hdr[1] |= (msg_len >> 1) & (MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1));
+    }
+
+    // Get msg_len bits of header
+    inline uint8_t get_msg_len() {
+        uint8_t res = (this->m_hdr[0] >> (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)) & 1;
+        return res | ((this->m_hdr[1] & MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1)) << 1)  ;
+    }
+
+    // Set crc4 bits of header
+    inline void set_crc4(uint8_t crc4_val) {
+        this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_CRC4_BITS) << (MSGR_MSG_LEN_BITS - 1));
+        this->m_hdr[1] |= (crc4_val & MASK_FIRST_N(MSGR_CRC4_BITS)) << (MSGR_MSG_LEN_BITS - 1);
+    }
+
+    // Get crc4 bits of header
+    inline uint8_t get_crc4() {
+        return (this->m_hdr[1] >> (MSGR_MSG_LEN_BITS - 1)) & MASK_FIRST_N(MSGR_CRC4_BITS);
+    }
+
+    // Calculate crc4 of packet masking crc4 bits with zeroes (might consider revision)
+    inline uint8_t calculate_crc4() {
+        uint8_t res = 0;
+        // Not safe in case of concurrent access
+        uint8_t tmp_crc4 = this->get_crc4();
+        this->set_crc4(0);
+        uint8_t *beg = reinterpret_cast<uint8_t *>(this->m_hdr);
+        uint8_t *end = beg + sizeof(this->m_hdr);
+        while(beg < end) {
+            res = util::crc4(res, *beg++, BITS_PER_BYTE);
+        }
+
+        this->set_crc4(tmp_crc4);
+
+        return res;
+    }
+
+};
 
 std::string::const_iterator push_single_packet (
     const std::string &name, 
