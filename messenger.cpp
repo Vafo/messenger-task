@@ -88,7 +88,7 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
     bool is_name_retrieved = false;
     
     if( buff.size() < 2 )
-        throw std::runtime_error("Buffer does not contain bytes for header (at least 2)");
+        throw std::runtime_error("messenger: buffer does not contain enough bytes for header (at least 2)");
 
     // Parse every packet
     std::vector<uint8_t>::const_iterator cur_iter = buff.begin();
@@ -103,7 +103,7 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
             msg_name = std::move(tmp_name);
             is_name_retrieved = true;
         } else if(msg_name != tmp_name) {
-            throw std::runtime_error("Sender names do not match accross packets");
+            throw std::runtime_error("messenger: sender names do not match accross packets");
         }
 
         // Add retrieved text
