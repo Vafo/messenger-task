@@ -49,6 +49,13 @@ std::string::const_iterator push_single_packet (
     std::vector<uint8_t> &out_vec
 );
 
+std::vector<uint8_t>::const_iterator parse_single_packet (
+    std::vector<uint8_t>::const_iterator buf_begin,
+    std::vector<uint8_t>::const_iterator buf_end,
+    std::string &out_name,
+    std::string &out_text
+);
+
 } // namespace detail
 
 
@@ -79,81 +86,28 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
     std::string msg_name;
     std::string msg_text;
     bool is_name_retrieved = false;
-
-    detail::msg_hdr_t header;
     
-    if( buff.size() < 2 ) {
+    if( buff.size() < 2 )
         throw std::runtime_error("Buffer does not contain bytes for header (at least 2)");
-    }
 
     // Parse every packet
-    std::vector<uint8_t>::iterator cur_iter = buff.begin();
+    std::vector<uint8_t>::const_iterator cur_iter = buff.begin();
     while(cur_iter != buff.end()) {
-        // Copy to struct according to endianness. Byte with flag comes first
-        if(util::is_little_endian()) {
-            std::copy(cur_iter, cur_iter + sizeof(header), header.begin());
-        } else {
-            // It does not flip endiannes, it just changes start of copy procedure
-            // std::copy_backward(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
-            throw std::runtime_error("Big endian conversion is required");
-        }
-        // Is it guaranteed that vector has always byte elements? Maybe increment in other way?
-        cur_iter += sizeof(header);
+        std::string tmp_name;
+        std::string tmp_text;
 
-        // Check if flag is valid
-        if (header.get_flag() != FLAG_BITS)
-        {
-            throw std::runtime_error("Flag bit is not valid");
-        }
-
-        uint8_t crc4_packet = header.get_crc4(); // CRC4 retrieved from packet
-        uint8_t crc4_real = header.calculate_crc4(); // CRC4 calculated from packet
-
-        // Check if name & msg bits are valid.
-        if(header.get_name_len() == 0) {
-            throw std::runtime_error("NAME_LEN bits are empty");
-        }
-
-        if(header.get_msg_len() == 0) {
-            throw std::runtime_error("MSG_LEN bits are empty");
-        }
-
-        // Retreive remaining bytes within packet
-        std::vector<uint8_t>::size_type remaining_bytes = header.get_name_len(); // Casts to size_type
-        remaining_bytes += header.get_msg_len();
-
-        // Check if the remaining bytes of packet do not exceed actual size of buffer
-        if(remaining_bytes > (buff.end() - cur_iter)) {
-            throw std::runtime_error("Invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
-        }
-
-        // Calculate crc4 of name and text parts of packet.
-        for(std::vector<uint8_t>::iterator crc4_iter = cur_iter;
-            crc4_iter != cur_iter + remaining_bytes; crc4_iter++) {
-            crc4_real = util::crc4(crc4_real, *crc4_iter, BITS_PER_BYTE);
-        }
-
-        if(crc4_real != crc4_packet) {
-            throw std::runtime_error("Invalid CRC4");
-        }
-
-        // Copy name
-        std::string tmp_str(cur_iter, cur_iter + header.get_name_len()); // can be done with ostream_iterator
+        cur_iter = detail::parse_single_packet(cur_iter, buff.cend(), tmp_name, tmp_text);
 
         // Check if name persists across packets
         if(!is_name_retrieved) {
-            msg_name = std::move(tmp_str);
+            msg_name = std::move(tmp_name);
             is_name_retrieved = true;
-        } else if(msg_name != tmp_str) {
+        } else if(msg_name != tmp_name) {
             throw std::runtime_error("Sender names do not match accross packets");
         }
 
-        cur_iter += header.get_name_len();
-        // Copy message text
-        std::vector<uint8_t>::iterator msg_txt_iter_end = cur_iter + header.get_msg_len();
-        while(cur_iter != msg_txt_iter_end)
-            msg_text += *cur_iter++; // Not sure if there is better way to do this
-        
+        // Add retrieved text
+        msg_text += tmp_text;
     }
 
     return msg_t(msg_name, msg_text);
@@ -304,6 +258,66 @@ std::string::const_iterator push_single_packet (
     return msg_begin + packet_msg_len;
 }
 
+std::vector<uint8_t>::const_iterator parse_single_packet (
+    std::vector<uint8_t>::const_iterator buf_begin,
+    std::vector<uint8_t>::const_iterator buf_end,
+    std::string &out_name,
+    std::string &out_text
+) {
+    msg_hdr_t header;
+    std::vector<uint8_t>::const_iterator cur_iter = buf_begin;
+
+    if(util::is_little_endian()) {
+        std::copy(cur_iter, cur_iter + sizeof(header), header.begin());
+    } else {
+        // It does not flip endiannes, it just changes start of copy procedure
+        // std::copy_backward(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
+        throw std::runtime_error("messenger: big endian conversion is required");
+    }
+    // Is it guaranteed that vector has always byte elements? Maybe increment in other way?
+    cur_iter += sizeof(header);
+
+    // Check if flag is valid
+    if (header.get_flag() != FLAG_BITS) throw std::runtime_error("messenger: flag bit is invalid");
+
+    uint8_t crc4_packet = header.get_crc4(); // CRC4 retrieved from packet
+    uint8_t crc4_real = header.calculate_crc4(); // CRC4 calculated from packet
+
+    // Check if name & msg bits are valid.
+    if(header.get_name_len() == 0) throw std::runtime_error("messenger: name_len bits are empty");
+
+    if(header.get_msg_len() == 0) throw std::runtime_error("messenger: msg_len bits are empty");
+
+    // Retreive remaining bytes within packet
+    std::vector<uint8_t>::size_type remaining_bytes = header.get_name_len(); // Casts to size_type
+    remaining_bytes += header.get_msg_len();
+
+    // Check if the remaining bytes of packet do not exceed actual size of buffer
+    if(remaining_bytes > (buf_end - cur_iter))
+        throw std::runtime_error("messenger: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
+
+    // Calculate crc4 of name and text parts of packet.
+    for(std::vector<uint8_t>::const_iterator crc4_iter = cur_iter;
+        crc4_iter != cur_iter + remaining_bytes; crc4_iter++) {
+        crc4_real = util::crc4(crc4_real, *crc4_iter, BITS_PER_BYTE);
+    }
+
+    if(crc4_real != crc4_packet) {
+        throw std::runtime_error("Invalid CRC4");
+    }
+
+    // Copy name
+    std::string tmp_str(cur_iter, cur_iter + header.get_name_len()); // can be done with ostream_iterator
+    out_name = tmp_str;
+    cur_iter += header.get_name_len();
+
+    // Copy message text
+    std::vector<uint8_t>::const_iterator msg_txt_iter_end = cur_iter + header.get_msg_len();
+    while(cur_iter != msg_txt_iter_end)
+        out_text += *cur_iter++; // Not sure if there is better way to do this
+
+    return cur_iter;
+}
 
 } // namespace detail
 
