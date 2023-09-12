@@ -6,6 +6,7 @@
 #define MESSENGER_UTIL_H
 
 #include <cstdint>
+#include <cstddef>
 
 namespace messenger::util {
     
@@ -19,11 +20,13 @@ namespace messenger::util {
      *
      * The @x value is treated as left-aligned, and bits above @bits are ignored
      * in the crc calculations.
+     * 
+     * Originally taken from https://codebrowser.dev/linux/linux/lib/crc4.c.html
      */
-    uint8_t crc4(uint8_t c, uint64_t x, int bits);
+    uint8_t crc4(uint8_t c, uint64_t x, size_t bits);
     
     // Checks if machine is Little Endian
-    inline bool isLittleEndian() {
+    inline bool is_little_endian() {
         short int number = 0x1;
         char *numPtr = (char*)&number;
         return (numPtr[0] == 1);

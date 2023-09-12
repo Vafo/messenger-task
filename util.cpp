@@ -6,7 +6,7 @@ namespace messenger::util {
         0x1, 0x6, 0xf, 0x8, 0xa, 0xd, 0x4, 0x3,
     };
     
-    uint8_t crc4(uint8_t c, uint64_t x, int bits)
+    uint8_t crc4(uint8_t c, uint64_t x, size_t bits)
     {
         int i;
         /* mask off anything above the top bit */

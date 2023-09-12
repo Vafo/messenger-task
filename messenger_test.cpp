@@ -19,14 +19,6 @@ int main() {
     std::cout << std::dec;
     std::cout << std::endl << std::endl;
 
-    // Redundant
-    // // Char content of message
-    // for(std::vector<uint8_t>::iterator iter = buff.begin();
-    //     iter != buff.end(); iter++) {
-    //     std::cout << *iter;
-    // }
-    // std::cout << std::endl << std::endl;
-
     messenger::msg_t parsed = messenger::parse_buff(buff);
 
     std::cout << "Name : " << parsed.name << std::endl;

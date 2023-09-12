@@ -168,7 +168,7 @@ namespace messenger
                 crc4_res = util::crc4(crc4_res, val, BITS_PER_BYTE); // Calculate crc4 per byte of name
                 res.push_back( static_cast<uint8_t>(val) );
             }
-
+            
             // Text part of packet
             for(msg_text_offset_end = msg_text_offset + packet_text_len ; 
                 msg_text_offset < msg_text_offset_end;
@@ -185,7 +185,7 @@ namespace messenger
             uint8_t *hdr_beg_ptr = reinterpret_cast<uint8_t *>(&header);
             uint8_t *hdr_end_ptr = hdr_beg_ptr + sizeof(header);
             // Should endianness be really considered?
-            if(util::isLittleEndian()) {
+            if(util::is_little_endian()) {
                 std::copy(hdr_beg_ptr, hdr_end_ptr, res.begin() + header_offset);
             } else {
                 // It does not flip endianness, it just changes start of copy procedure
@@ -219,7 +219,7 @@ namespace messenger
         std::vector<uint8_t>::iterator cur_iter = buff.begin();
         while(cur_iter != buff.end()) {
             // Copy to struct according to endianness. Byte with flag comes first
-            if(util::isLittleEndian()) {
+            if(util::is_little_endian()) {
                 std::copy(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
             } else {
                 // It does not flip endiannes, it just changes start of copy procedure
