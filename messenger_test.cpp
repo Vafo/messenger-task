@@ -2,21 +2,24 @@
 #include <vector>
 
 #include "messenger.hpp"
-
+#include "util.hpp"
 
 int main() {
     messenger::msg_t msg("Vafo", "HELO EVERDAIANE!!1 dwam jdwn aknwkjan dknaw ndkjanw kj nwa");
     std::vector<uint8_t> buff = messenger::make_buff(msg);
 
-    std::cout << std::hex;
+    {
+        // How to get back to default state of ostream (?)
+        // Ans: use helper class - scoped_hex of ostream's
+        messenger::util::scoped_hex tmp_obj(std::cout); // Is name really required?
 
-    // Byte content of message
-    for(std::vector<uint8_t>::iterator iter = buff.begin();
-        iter != buff.end(); iter++) {
-        std::cout << static_cast<unsigned>(*iter) << " ";
+        // Byte content of message
+        for(std::vector<uint8_t>::iterator iter = buff.begin();
+            iter != buff.end(); iter++) {
+            std::cout << static_cast<unsigned>(*iter) << " ";
+        }
     }
-    // How to get back to default state of ostream (?)
-    std::cout << std::dec;
+
     std::cout << std::endl << std::endl;
 
     messenger::msg_t parsed = messenger::parse_buff(buff);

@@ -5,6 +5,8 @@
 #ifndef MESSENGER_UTIL_H
 #define MESSENGER_UTIL_H
 
+#include <iostream>
+
 #include <cstdint>
 #include <cstddef>
 
@@ -31,6 +33,19 @@ namespace messenger::util {
         char *numPtr = (char*)&number;
         return (numPtr[0] == 1);
     }
+
+    class scoped_hex {
+    private:
+        std::ostream &target_stream;
+    public:
+        scoped_hex(std::ostream &stream): target_stream(stream) {
+            target_stream << std::hex;
+        }
+
+        ~scoped_hex() {
+            target_stream << std::dec;
+        }
+    };
 }
 
 #endif
