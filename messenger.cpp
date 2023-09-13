@@ -208,6 +208,24 @@ public:
 
 };
 
+// For loop of string, calculating crc4 and pushing into out vector
+uint8_t calc_crc4_and_push(
+    uint8_t start_crc4, 
+    std::string::const_iterator str_beg, 
+    std::string::const_iterator str_end, 
+    std::vector<uint8_t> &out_vec
+) {
+
+    for(std::string::const_iterator iter = str_beg;
+        iter != str_end; 
+        iter++) {
+        start_crc4 = util::crc4(start_crc4, *iter, BITS_PER_BYTE);
+        out_vec.push_back( static_cast<uint8_t>(*iter) );
+    }
+
+    return start_crc4;
+}
+
 std::string::const_iterator push_single_packet (
     const std::string &name, 
     std::string::const_iterator msg_begin, 
@@ -215,7 +233,8 @@ std::string::const_iterator push_single_packet (
     std::vector<uint8_t> &out_vec
 ) {
     // Length of message of packet
-    std::string::size_type packet_msg_len = MIN(msg_end - msg_begin, MSGR_MSG_LEN_MAX);
+    std::string::size_type packet_msg_len = std::min(msg_end - msg_begin, 
+        static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
     
     // Header part of packet
     msg_hdr_t header(FLAG_BITS, name.size(), packet_msg_len);
@@ -227,32 +246,26 @@ std::string::const_iterator push_single_packet (
     out_vec.resize(header_offset + sizeof(header));
 
     // Calculate crc4 and push name part of packet
-    for(std::string::size_type i = 0; i < name.size(); i++) {
-        std::string::value_type val = name[i];
-        crc4_res = util::crc4(crc4_res, val, BITS_PER_BYTE); // Calculate crc4 per byte of name
-        out_vec.push_back( static_cast<uint8_t>(val) );
-    }
+    crc4_res = calc_crc4_and_push(crc4_res, name.begin(), name.end(), /* out */ out_vec);
     
-    // Text part of packet
-    for(std::string::const_iterator iter = msg_begin, end = msg_begin + packet_msg_len; 
-        iter != end;
-        iter++ ) {
-        std::string::value_type val = *iter;
-        crc4_res = util::crc4(crc4_res, val, BITS_PER_BYTE); // Calculate crc4 per byte of text
-        out_vec.push_back( static_cast<uint8_t>(val) );
-    }
+    // Calculate crc4 and push text part of packet
+    crc4_res = calc_crc4_and_push(crc4_res, msg_begin, msg_begin + packet_msg_len, /* out */ out_vec);
     
     // Place header into packet with calculated crc4
     header.set_crc4(crc4_res);
 
+    // The code below is left just for sake of practice of using static_assert
+    // Yet arguably, does header-packet has endianness? Is it considered multi-byte entity?
+    // Or should header-packet's structure remain the same, regardless of endianness?
+    // And if header of packets share endianness, should it be always big-endian?
+
     // Should endianness be really considered?
-    if(util::is_little_endian()) {
+    static_assert(util::endian::native != util::endian::big, "messenger: big endian conversion is not supported");
+
+    // Does compiler simplify this if statement, which has const condition?
+    if(util::endian::native == util::endian::little) {
         // Modify vector using pointers (not sure if there is other safer way to modify contiguous bytes)
         std::copy(header.begin(), header.end(), out_vec.begin() + header_offset);
-    } else {
-        // It does not flip endianness, it just changes start of copy procedure
-        // std::copy_backward(hdr_beg_ptr, hdr_end_ptr, res.begin() + header_offset);
-        throw std::runtime_error("messenger: big endian conversion is required");
     }
 
     return msg_begin + packet_msg_len;
@@ -267,13 +280,13 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
     msg_hdr_t header;
     std::vector<uint8_t>::const_iterator cur_iter = buf_begin;
 
-    if(util::is_little_endian()) {
+    // Big endian conversion is not supported yet
+    static_assert(util::endian::native != util::endian::big, "messenger: big endian conversion is not supported");
+
+    if(util::endian::native == util::endian::little) {
         std::copy(cur_iter, cur_iter + sizeof(header), header.begin());
-    } else {
-        // It does not flip endiannes, it just changes start of copy procedure
-        // std::copy_backward(cur_iter, cur_iter + sizeof(header), hdr_beg_ptr);
-        throw std::runtime_error("messenger: big endian conversion is required");
     }
+
     // Is it guaranteed that vector has always byte elements? Maybe increment in other way?
     cur_iter += sizeof(header);
 

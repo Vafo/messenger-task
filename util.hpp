@@ -27,12 +27,18 @@ namespace messenger::util {
  */
 uint8_t crc4(uint8_t c, uint64_t x, size_t bits);
 
-// Checks if machine is Little Endian
-inline bool is_little_endian() {
-    short int number = 0x1;
-    char *numPtr = (char*)&number;
-    return (numPtr[0] == 1);
-}
+/**
+ * endian - get endianness of machine
+ * 
+ * @details STL variant is implemented in C++20
+ *          This implementation is taken from http://howardhinnant.github.io/endian.html#Implementation
+*/
+enum class endian
+{
+    little = 1234,
+    big    = 4321,
+    native = 1234
+};
 
 /**
  * @brief scoped_hex - set ostream to hex.
