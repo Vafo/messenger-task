@@ -50,7 +50,7 @@ std::string::const_iterator push_single_packet (
 );
 
 std::vector<uint8_t>::const_iterator parse_single_packet (
-    std::vector<uint8_t>::const_iterator buf_begin,
+    std::vector<uint8_t>::const_iterator buf_beg,
     std::vector<uint8_t>::const_iterator buf_end,
     std::string &out_name,
     std::string &out_text
@@ -262,7 +262,7 @@ class msg_packet_t {
 
 private:
     uint8_t m_raw[sizeof(msg_hdr_t) + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX];
-    msg_hdr_t * const m_hdr_ptr;
+    msg_hdr_t * const m_hdr_ptr; // Just to simplify access to header
 
 public:
     /**
@@ -306,6 +306,57 @@ public:
 
         // Place header into packet with calculated crc4
         *m_hdr_ptr = msg_hdr_t(*m_hdr_ptr, crc4_res);
+    }
+
+    msg_packet_t(
+        std::vector<uint8_t>::const_iterator buf_beg,
+        std::vector<uint8_t>::const_iterator buf_end
+    ): m_hdr_ptr( reinterpret_cast<msg_hdr_t * const>(&m_raw[0]) ) {
+
+        std::vector<uint8_t>::const_iterator buf_iter = buf_beg;
+        
+        // Copy header part
+        if( (buf_end - buf_beg) < sizeof(msg_hdr_t))
+            throw std::runtime_error("messenger: buffer does not contain enough bytes for header");
+
+        // Big endian conversion is not supported yet
+        static_assert(util::endian::native != util::endian::big, "messenger: big endian conversion is not supported");
+
+        if(util::endian::native == util::endian::little) {
+            *m_hdr_ptr = msg_hdr_t(buf_iter, buf_iter + sizeof(msg_hdr_t));
+        }
+        // Is it guaranteed that vector has always byte elements? Maybe increment in other way?
+        buf_iter += sizeof(msg_hdr_t);
+
+
+        // Validate crc4
+        uint8_t crc4_packet = m_hdr_ptr->get_crc4(); // CRC4 retrieved from packet
+        uint8_t crc4_real = m_hdr_ptr->calculate_crc4(); // CRC4 calculated from packet
+
+        // Retreive remaining bytes within packet
+        std::vector<uint8_t>::size_type remaining_bytes = m_hdr_ptr->get_name_len(); // Casts to size_type
+        remaining_bytes += m_hdr_ptr->get_msg_len();
+
+        // Check if the remaining bytes of packet do not exceed actual size of buffer
+        if(remaining_bytes > (buf_end - buf_iter))
+            throw std::runtime_error("messenger: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
+
+        if(remaining_bytes > (ARR_LEN(m_raw) - sizeof(msg_hdr_t)) ) // Impossible, due to max vals of flags
+            throw std::runtime_error("messenger: msg_packet_t: indicated name & msg size exceeds packet size");
+
+        // Copy name & msg
+        std::copy(buf_iter, buf_iter + remaining_bytes, &m_raw[sizeof(msg_hdr_t)]);
+
+        // Calculate crc4 of name and text parts of packet.
+        for(std::vector<uint8_t>::const_iterator crc4_iter = buf_iter;
+            crc4_iter != buf_iter + remaining_bytes; crc4_iter++) {
+            crc4_real = util::crc4(crc4_real, *crc4_iter, BITS_PER_BYTE);
+        }
+
+        if(crc4_real != crc4_packet) {
+            throw std::runtime_error("Invalid CRC4");
+        }
+        
     }
 
     // Are getters for name & msg len redundant?
@@ -436,58 +487,17 @@ std::string::const_iterator push_single_packet (
 }
 
 std::vector<uint8_t>::const_iterator parse_single_packet (
-    std::vector<uint8_t>::const_iterator buf_begin,
+    std::vector<uint8_t>::const_iterator buf_beg,
     std::vector<uint8_t>::const_iterator buf_end,
     std::string &out_name,
     std::string &out_text
 ) {
-    msg_hdr_t header;
-    std::vector<uint8_t>::const_iterator cur_iter = buf_begin;
+    msg_packet_t parsed_packet(buf_beg, buf_end);
 
-    if( (buf_end - buf_begin) < sizeof(msg_hdr_t))
-        throw std::runtime_error("messenger: buffer does not contain enough bytes for header");
+    out_name = std::string(parsed_packet.name_begin(), parsed_packet.name_end());
+    out_text = std::string(parsed_packet.msg_begin(), parsed_packet.msg_end());
 
-    // Big endian conversion is not supported yet
-    static_assert(util::endian::native != util::endian::big, "messenger: big endian conversion is not supported");
-
-    if(util::endian::native == util::endian::little) {
-        header = msg_hdr_t(cur_iter, cur_iter + sizeof(msg_hdr_t));
-    }
-    // Is it guaranteed that vector has always byte elements? Maybe increment in other way?
-    cur_iter += sizeof(header);
-
-    uint8_t crc4_packet = header.get_crc4(); // CRC4 retrieved from packet
-    uint8_t crc4_real = header.calculate_crc4(); // CRC4 calculated from packet
-
-    // Retreive remaining bytes within packet
-    std::vector<uint8_t>::size_type remaining_bytes = header.get_name_len(); // Casts to size_type
-    remaining_bytes += header.get_msg_len();
-
-    // Check if the remaining bytes of packet do not exceed actual size of buffer
-    if(remaining_bytes > (buf_end - cur_iter))
-        throw std::runtime_error("messenger: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
-
-    // Calculate crc4 of name and text parts of packet.
-    for(std::vector<uint8_t>::const_iterator crc4_iter = cur_iter;
-        crc4_iter != cur_iter + remaining_bytes; crc4_iter++) {
-        crc4_real = util::crc4(crc4_real, *crc4_iter, BITS_PER_BYTE);
-    }
-
-    if(crc4_real != crc4_packet) {
-        throw std::runtime_error("Invalid CRC4");
-    }
-
-    // Copy name
-    std::string tmp_str(cur_iter, cur_iter + header.get_name_len()); // can be done with ostream_iterator
-    out_name = tmp_str;
-    cur_iter += header.get_name_len();
-
-    // Copy message text
-    std::vector<uint8_t>::const_iterator msg_txt_iter_end = cur_iter + header.get_msg_len();
-    while(cur_iter != msg_txt_iter_end)
-        out_text += *cur_iter++; // Not sure if there is better way to do this
-
-    return cur_iter;
+    return buf_beg + (parsed_packet.end() - parsed_packet.begin());
 }
 
 } // namespace detail
