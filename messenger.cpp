@@ -77,12 +77,8 @@ uint8_t calc_crc4_and_push(
 
 
 std::vector<uint8_t> make_buff(const msg_t & msg) {
-    if(msg.name.empty()) throw std::length_error("messenger: sender's name is empty");
-    
+    // Vital validation check, as msg_packet_t cant track it, since while loop wont execute
     if(msg.text.empty()) throw std::length_error("messenger: text is empty");
-    
-    if(msg.name.size() >= MSGR_NAME_LEN_MAX)
-        throw std::length_error("messenger: name length exceeds maximum length " DEF_TO_STR(MSGR_NAME_LEN_MAX) );
 
     // Vector to store result of func
     std::vector<uint8_t> res;
@@ -126,6 +122,7 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
 
     return msg_t(msg_name, msg_text);
 }
+
 
 /**
  * Covers details of operation
@@ -258,6 +255,7 @@ private:
 
 };
 
+
 class msg_packet_t {
 
 private:
@@ -317,7 +315,7 @@ public:
         
         // Copy header part
         if( (buf_end - buf_beg) < sizeof(msg_hdr_t))
-            throw std::runtime_error("messenger: buffer does not contain enough bytes for header");
+            throw std::runtime_error("messenger: msg_packet_t: buffer does not contain enough bytes for header");
 
         // Big endian conversion is not supported yet
         static_assert(util::endian::native != util::endian::big, "messenger: big endian conversion is not supported");
@@ -339,7 +337,7 @@ public:
 
         // Check if the remaining bytes of packet do not exceed actual size of buffer
         if(remaining_bytes > (buf_end - buf_iter))
-            throw std::runtime_error("messenger: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
+            throw std::runtime_error("messenger: msg_packet_t: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
 
         if(remaining_bytes > (ARR_LEN(m_raw) - sizeof(msg_hdr_t)) ) // Impossible, due to max vals of flags
             throw std::runtime_error("messenger: msg_packet_t: indicated name & msg size exceeds packet size");
@@ -401,6 +399,7 @@ public:
 
 };
 
+
 // For loop of string, calculating crc4 and placing into uint8_t buffer
 uint8_t calc_crc4_and_copy(
     uint8_t start_crc4, 
@@ -444,6 +443,7 @@ uint8_t calc_crc4_and_push(
 
     return start_crc4;
 }
+
 
 std::string::const_iterator push_single_packet (
     const std::string &name, 
