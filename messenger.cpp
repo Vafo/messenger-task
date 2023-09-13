@@ -56,6 +56,23 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
     std::string &out_text
 );
 
+// For loop of string, calculating crc4 and placing into uint8_t buffer
+uint8_t calc_crc4_and_copy(
+    uint8_t start_crc4, 
+    std::string::const_iterator str_beg, 
+    std::string::const_iterator str_end, 
+    uint8_t * const buf_beg, 
+    uint8_t * const buf_end
+);
+
+// For loop of string, calculating crc4 and pushing into out_vector
+uint8_t calc_crc4_and_push(
+    uint8_t start_crc4, 
+    std::string::const_iterator str_beg, 
+    std::string::const_iterator str_end, 
+    std::vector<uint8_t> &out_vec
+);
+
 } // namespace detail
 
 
@@ -241,7 +258,84 @@ private:
 
 };
 
-// For loop of string, calculating crc4 and pushing into out vector
+class msg_packet_t {
+
+private:
+    uint8_t m_raw[sizeof(msg_hdr_t) + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX];
+    msg_hdr_t * const m_hdr_ptr;
+
+public:
+    // Create packet from name & msg
+    msg_packet_t(
+        const std::string &name,
+        std::string::const_iterator msg_beg,
+        std::string::const_iterator msg_end
+    ): m_hdr_ptr( reinterpret_cast<msg_hdr_t * const>(&m_raw[0]) ) {
+        
+        std::string::size_type packet_msg_len = msg_end - msg_beg;
+
+        if(packet_msg_len == 0 || packet_msg_len > MSGR_MSG_LEN_MAX) 
+            throw std::runtime_error("messenger: msg_packet_t: msg of inappropriate length is passed");
+
+        if(name.empty() || name.size() > MSGR_NAME_LEN_MAX)
+            throw std::runtime_error("messenger: msg_packet_t: name of inappropriate length is passed");
+
+        *m_hdr_ptr = msg_hdr_t(name.size(), packet_msg_len);
+        
+        uint8_t crc4_res = 0;
+        crc4_res = m_hdr_ptr->calculate_crc4(); // Calculate crc4, masking crc4 bits with zeroes
+
+        uint8_t *m_raw_iter = &m_raw[sizeof(msg_hdr_t)];
+
+        // Calculate crc4 and push name part of packet
+        crc4_res = calc_crc4_and_copy(crc4_res, name.begin(), name.end(), /* out */ m_raw_iter, m_raw + ARR_LEN(m_raw));
+        m_raw_iter += name.size();
+
+        // Calculate crc4 and push text part of packet
+        crc4_res = calc_crc4_and_copy(crc4_res, msg_beg, msg_end, /* out */ m_raw_iter, m_raw + ARR_LEN(m_raw));
+        m_raw_iter += msg_end - msg_beg;
+
+        // Place header into packet with calculated crc4
+        *m_hdr_ptr = msg_hdr_t(*m_hdr_ptr, crc4_res);
+    }
+
+    const uint8_t *begin() {
+        return &m_raw[0];
+    }
+
+    const uint8_t *end() {
+        return &m_raw[0] + (sizeof(msg_hdr_t) + m_hdr_ptr->get_name_len() + m_hdr_ptr->get_msg_len() );
+    }
+
+};
+
+// For loop of string, calculating crc4 and placing into uint8_t buffer
+uint8_t calc_crc4_and_copy(
+    uint8_t start_crc4, 
+    std::string::const_iterator str_beg, 
+    std::string::const_iterator str_end, 
+    uint8_t * const buf_beg, 
+    uint8_t * const buf_end
+) {
+    if(buf_beg == NULL || buf_end == NULL)
+        throw std::runtime_error("messenger: calc_crc4_and_push: buf pointer(s) is(are) NULL");
+
+    if( (buf_end - buf_beg) < (str_end - str_beg) )
+        throw std::runtime_error("messenger: calc_crc4_and_push: string does not fit into buffer");
+
+    uint8_t *buf_iter = buf_beg;
+
+    for(std::string::const_iterator iter = str_beg;
+        iter != str_end && buf_iter != buf_end; 
+        iter++) {
+        start_crc4 = util::crc4(start_crc4, *iter, BITS_PER_BYTE);
+        *buf_iter++ = *iter;
+    }
+
+    return start_crc4;
+}
+
+// For loop of string, calculating crc4 and pushing into out_vector
 uint8_t calc_crc4_and_push(
     uint8_t start_crc4, 
     std::string::const_iterator str_beg, 
@@ -266,26 +360,14 @@ std::string::const_iterator push_single_packet (
     std::vector<uint8_t> &out_vec
 ) {
     // Length of message of packet
+    // It is responsibility of caller, to check if message of appropriate size for 1 packet
+    // As packet class is responsible for creating single packet
+    // Yet multiple packets are needed for the caller
     std::string::size_type packet_msg_len = std::min(msg_end - msg_begin, 
         static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
     
-    // Header part of packet
-    msg_hdr_t header(name.size(), packet_msg_len);
-    
-    uint8_t crc4_res = 0;
-    crc4_res = header.calculate_crc4(); // Calculate crc4, masking crc4 bits with zeroes
-    // Store cur loc of header within vector and make space for it. Header will be placed later
-    std::vector<uint8_t>::size_type header_offset = out_vec.size();
-    out_vec.resize(header_offset + sizeof(header));
-
-    // Calculate crc4 and push name part of packet
-    crc4_res = calc_crc4_and_push(crc4_res, name.begin(), name.end(), /* out */ out_vec);
-    
-    // Calculate crc4 and push text part of packet
-    crc4_res = calc_crc4_and_push(crc4_res, msg_begin, msg_begin + packet_msg_len, /* out */ out_vec);
-    
-    // Place header into packet with calculated crc4
-    header = msg_hdr_t(header, crc4_res);
+    // Create packet
+    msg_packet_t packet(name, msg_begin, msg_begin + packet_msg_len);
 
     // The code below is left just for sake of practice of using static_assert
     // Yet arguably, does header-packet has endianness? Is it considered multi-byte entity?
@@ -297,8 +379,15 @@ std::string::const_iterator push_single_packet (
 
     // Does compiler simplify this if statement, which has const condition?
     if(util::endian::native == util::endian::little) {
-        // Modify vector using pointers (not sure if there is other safer way to modify contiguous bytes)
-        std::copy(header.begin(), header.end(), out_vec.begin() + header_offset);
+        
+        // Is there better way to copy/append from array of elements to vector (?)
+        for(const uint8_t *iter = packet.begin(), *iter_end = packet.end();
+            iter != iter_end;
+            iter++
+        ) {
+            out_vec.push_back(*iter);
+        }
+        
     }
 
     return msg_begin + packet_msg_len;
