@@ -5,29 +5,55 @@
 #ifndef MESSENGER_UTIL_H
 #define MESSENGER_UTIL_H
 
+#include <iostream>
+
 #include <cstdint>
+#include <cstddef>
 
 namespace messenger::util {
     
-    /**
-     * crc4 - calculate the 4-bit crc of a value.
-     * @c:    starting crc4
-     * @x:    value to checksum
-     * @bits: number of bits in @x to checksum
-     *
-     * Returns the crc4 value of @x, using polynomial 0b10111.
-     *
-     * The @x value is treated as left-aligned, and bits above @bits are ignored
-     * in the crc calculations.
-     */
-    uint8_t crc4(uint8_t c, uint64_t x, int bits);
-    
-    // Checks if machine is Little Endian
-    inline bool isLittleEndian() {
-        short int number = 0x1;
-        char *numPtr = (char*)&number;
-        return (numPtr[0] == 1);
-    }
+/**
+ * crc4 - calculate the 4-bit crc of a value.
+ * @c:    starting crc4
+ * @x:    value to checksum
+ * @bits: number of bits in @x to checksum
+ *
+ * Returns the crc4 value of @x, using polynomial 0b10111.
+ *
+ * The @x value is treated as left-aligned, and bits above @bits are ignored
+ * in the crc calculations.
+ * 
+ * Originally taken from https://codebrowser.dev/linux/linux/lib/crc4.c.html
+ */
+uint8_t crc4(uint8_t c, uint64_t x, size_t bits);
+
+// Checks if machine is Little Endian
+inline bool is_little_endian() {
+    short int number = 0x1;
+    char *numPtr = (char*)&number;
+    return (numPtr[0] == 1);
 }
+
+/**
+ * @brief scoped_hex - set ostream to hex.
+ * @details Helper class used to set std::hex output of ostream within scope of scoped_hex object
+ *          Once reaching end of scope, scoped_hex sets back std::dec output of ostream
+*/
+class scoped_hex {
+
+private:
+    std::ostream &target_stream;
+public:
+    scoped_hex(std::ostream &stream): target_stream(stream) {
+        target_stream << std::hex;
+    }
+
+    ~scoped_hex() {
+        target_stream << std::dec;
+    }
+    
+};
+
+} // namespace messenger::util
 
 #endif
