@@ -86,9 +86,6 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
     std::string msg_name;
     std::string msg_text;
     bool is_name_retrieved = false;
-    
-    if( buff.size() < 2 )
-        throw std::runtime_error("messenger: buffer does not contain enough bytes for header (at least 2)");
 
     // Parse every packet
     std::vector<uint8_t>::const_iterator cur_iter = buff.begin();
@@ -128,24 +125,51 @@ public:
 
     msg_hdr_t(): m_hdr() { } // Will it fill m_hdr (array type) with zeroes?
 
-    msg_hdr_t(uint8_t flag, uint8_t name_len, uint8_t msg_len) {
-        this->set_flag(flag);
+    msg_hdr_t(uint8_t name_len, uint8_t msg_len) {
+        this->set_flag(FLAG_BITS); // Design defined valid value
         this->set_name_len(name_len);
         this->set_msg_len(msg_len);
     }
+
+    // Copy constructor with modification
+    // Is used to avoid setters
+    msg_hdr_t(const msg_hdr_t &orig_header, uint8_t crc4) {
+        *this = orig_header;
+        this->set_crc4(crc4);
+    }
+
+    msg_hdr_t(const uint8_t *beg, const uint8_t *end) {
+        if( (end - beg) != sizeof(msg_hdr_t) ) 
+            throw std::runtime_error("messenger: msg_hdr_t: constructor received inappropriate range");
+
+        std::copy(beg, end, &m_hdr[0]);
+    }
     
-    uint8_t *begin() {
-        return reinterpret_cast<uint8_t *>(&this->m_hdr);
+    msg_hdr_t(
+        std::vector<uint8_t>::const_iterator beg,
+        std::vector<uint8_t>::const_iterator end
+    ) {
+        if( (end - beg) != sizeof(msg_hdr_t) ) 
+            throw std::runtime_error("messenger: msg_hdr_t: constructor received inappropriate range");
+
+        std::copy(beg, end, &m_hdr[0]);
+
+        // Check if flag is valid
+        if (this->get_flag() != FLAG_BITS) throw std::runtime_error("messenger: flag bit is invalid");
+
+        // Check if name & msg bits are valid.
+        if(this->get_name_len() == 0) throw std::runtime_error("messenger: name_len bits are empty");
+        
+        if(this->get_msg_len() == 0) throw std::runtime_error("messenger: msg_len bits are empty");
+
     }
 
-    uint8_t *end() {
-        return reinterpret_cast<uint8_t *>(&this->m_hdr) + sizeof(this->m_hdr);
+    const uint8_t *begin() const{
+        return reinterpret_cast<const uint8_t *>(&this->m_hdr);
     }
 
-    // Set flag bits of header
-    inline void set_flag(uint8_t flag) {
-        this->m_hdr[0] &= ~(MASK_FIRST_N(MSGR_FLAG_BITS)); // Remove prev value of flag bits;
-        this->m_hdr[0] |= flag & MASK_FIRST_N(MSGR_FLAG_BITS);
+    const uint8_t *end() const{
+        return reinterpret_cast<const uint8_t *>(&this->m_hdr) + sizeof(this->m_hdr);
     }
 
     // Get flag bits of header
@@ -153,35 +177,15 @@ public:
         return this->m_hdr[0] & MASK_FIRST_N(MSGR_FLAG_BITS);
     }
 
-    // Set name_len bits of header
-    inline void set_name_len(uint8_t name_len) {
-        this->m_hdr[0] &= ~( MASK_FIRST_N(MSGR_NAME_LEN_BITS) << MSGR_FLAG_BITS );  // Remove prev value of name_len bits
-        this->m_hdr[0] |= (name_len & MASK_FIRST_N(MSGR_NAME_LEN_BITS)) << MSGR_FLAG_BITS;
-    }
-
     // Get name_len bits of header
     inline uint8_t get_name_len() {
         return (this->m_hdr[0] >> MSGR_FLAG_BITS) & MASK_FIRST_N(MSGR_NAME_LEN_BITS);
-    }
-
-    // Set msg_len bits of header
-    inline void set_msg_len(uint8_t msg_len) {
-        this->m_hdr[0] &= ~(1 << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)); // Remove 1st bit of msg_len in 0th byte
-        this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1 /* exclude 1 from tot */));
-        this->m_hdr[0] |= (msg_len & 1) << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS);
-        this->m_hdr[1] |= (msg_len >> 1) & (MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1));
     }
 
     // Get msg_len bits of header
     inline uint8_t get_msg_len() {
         uint8_t res = (this->m_hdr[0] >> (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)) & 1;
         return res | ((this->m_hdr[1] & MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1)) << 1)  ;
-    }
-
-    // Set crc4 bits of header
-    inline void set_crc4(uint8_t crc4_val) {
-        this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_CRC4_BITS) << (MSGR_MSG_LEN_BITS - 1));
-        this->m_hdr[1] |= (crc4_val & MASK_FIRST_N(MSGR_CRC4_BITS)) << (MSGR_MSG_LEN_BITS - 1);
     }
 
     // Get crc4 bits of header
@@ -204,6 +208,35 @@ public:
         this->set_crc4(tmp_crc4);
 
         return res;
+    }
+
+private:
+    // Setters are still internally used, to avoid mixing in bitwise ops
+
+    // Set flag bits of header
+    inline void set_flag(uint8_t flag) {
+        this->m_hdr[0] &= ~(MASK_FIRST_N(MSGR_FLAG_BITS)); // Remove prev value of flag bits;
+        this->m_hdr[0] |= flag & MASK_FIRST_N(MSGR_FLAG_BITS);
+    }
+
+    // Set name_len bits of header
+    inline void set_name_len(uint8_t name_len) {
+        this->m_hdr[0] &= ~( MASK_FIRST_N(MSGR_NAME_LEN_BITS) << MSGR_FLAG_BITS );  // Remove prev value of name_len bits
+        this->m_hdr[0] |= (name_len & MASK_FIRST_N(MSGR_NAME_LEN_BITS)) << MSGR_FLAG_BITS;
+    }
+
+    // Set msg_len bits of header
+    inline void set_msg_len(uint8_t msg_len) {
+        this->m_hdr[0] &= ~(1 << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)); // Remove 1st bit of msg_len in 0th byte
+        this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1 /* exclude 1 from tot */));
+        this->m_hdr[0] |= (msg_len & 1) << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS);
+        this->m_hdr[1] |= (msg_len >> 1) & (MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1));
+    }
+
+    // Set crc4 bits of header
+    inline void set_crc4(uint8_t crc4_val) {
+        this->m_hdr[1] &= ~(MASK_FIRST_N(MSGR_CRC4_BITS) << (MSGR_MSG_LEN_BITS - 1));
+        this->m_hdr[1] |= (crc4_val & MASK_FIRST_N(MSGR_CRC4_BITS)) << (MSGR_MSG_LEN_BITS - 1);
     }
 
 };
@@ -237,7 +270,7 @@ std::string::const_iterator push_single_packet (
         static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
     
     // Header part of packet
-    msg_hdr_t header(FLAG_BITS, name.size(), packet_msg_len);
+    msg_hdr_t header(name.size(), packet_msg_len);
     
     uint8_t crc4_res = 0;
     crc4_res = header.calculate_crc4(); // Calculate crc4, masking crc4 bits with zeroes
@@ -252,7 +285,7 @@ std::string::const_iterator push_single_packet (
     crc4_res = calc_crc4_and_push(crc4_res, msg_begin, msg_begin + packet_msg_len, /* out */ out_vec);
     
     // Place header into packet with calculated crc4
-    header.set_crc4(crc4_res);
+    header = msg_hdr_t(header, crc4_res);
 
     // The code below is left just for sake of practice of using static_assert
     // Yet arguably, does header-packet has endianness? Is it considered multi-byte entity?
@@ -280,26 +313,20 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
     msg_hdr_t header;
     std::vector<uint8_t>::const_iterator cur_iter = buf_begin;
 
+    if( (buf_end - buf_begin) < sizeof(msg_hdr_t))
+        throw std::runtime_error("messenger: buffer does not contain enough bytes for header");
+
     // Big endian conversion is not supported yet
     static_assert(util::endian::native != util::endian::big, "messenger: big endian conversion is not supported");
 
     if(util::endian::native == util::endian::little) {
-        std::copy(cur_iter, cur_iter + sizeof(header), header.begin());
+        header = msg_hdr_t(cur_iter, cur_iter + sizeof(msg_hdr_t));
     }
-
     // Is it guaranteed that vector has always byte elements? Maybe increment in other way?
     cur_iter += sizeof(header);
 
-    // Check if flag is valid
-    if (header.get_flag() != FLAG_BITS) throw std::runtime_error("messenger: flag bit is invalid");
-
     uint8_t crc4_packet = header.get_crc4(); // CRC4 retrieved from packet
     uint8_t crc4_real = header.calculate_crc4(); // CRC4 calculated from packet
-
-    // Check if name & msg bits are valid.
-    if(header.get_name_len() == 0) throw std::runtime_error("messenger: name_len bits are empty");
-
-    if(header.get_msg_len() == 0) throw std::runtime_error("messenger: msg_len bits are empty");
 
     // Retreive remaining bytes within packet
     std::vector<uint8_t>::size_type remaining_bytes = header.get_name_len(); // Casts to size_type
