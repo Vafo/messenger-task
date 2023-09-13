@@ -265,16 +265,25 @@ private:
     msg_hdr_t * const m_hdr_ptr;
 
 public:
-    // Create packet from name & msg
+    /**
+     * Construct packet from name and message
+     * 
+     * @param name sender's name
+     * @param msg_beg message's beginning
+     * @param msg_end message's end
+     * 
+     * @note first MSGR_MSG_LEN_MAX from message range will be included in packet ignoring rest 
+    */
     msg_packet_t(
         const std::string &name,
         std::string::const_iterator msg_beg,
         std::string::const_iterator msg_end
     ): m_hdr_ptr( reinterpret_cast<msg_hdr_t * const>(&m_raw[0]) ) {
-        
-        std::string::size_type packet_msg_len = msg_end - msg_beg;
 
-        if(packet_msg_len == 0 || packet_msg_len > MSGR_MSG_LEN_MAX) 
+        std::string::size_type packet_msg_len = std::min(msg_end - msg_beg, 
+            static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
+
+        if(packet_msg_len <= 0) 
             throw std::runtime_error("messenger: msg_packet_t: msg of inappropriate length is passed");
 
         if(name.empty() || name.size() > MSGR_NAME_LEN_MAX)
@@ -292,18 +301,50 @@ public:
         m_raw_iter += name.size();
 
         // Calculate crc4 and push text part of packet
-        crc4_res = calc_crc4_and_copy(crc4_res, msg_beg, msg_end, /* out */ m_raw_iter, m_raw + ARR_LEN(m_raw));
-        m_raw_iter += msg_end - msg_beg;
+        crc4_res = calc_crc4_and_copy(crc4_res, msg_beg, msg_beg + packet_msg_len, /* out */ m_raw_iter, m_raw + ARR_LEN(m_raw));
+        m_raw_iter += packet_msg_len;
 
         // Place header into packet with calculated crc4
         *m_hdr_ptr = msg_hdr_t(*m_hdr_ptr, crc4_res);
     }
 
-    const uint8_t *begin() {
+    // Are getters for name & msg len redundant?
+
+    inline uint8_t get_name_len() {
+        return m_hdr_ptr->get_name_len();
+    }
+
+    inline uint8_t get_msg_len() {
+        return m_hdr_ptr->get_msg_len();
+    }
+
+    // Beginning of name in packet
+    inline const uint8_t *name_begin() {
+        return &m_raw[sizeof(msg_hdr_t)];
+    }
+
+    // End of name in packet
+    inline const uint8_t *name_end() {
+        return name_begin() + m_hdr_ptr->get_name_len();
+    }
+
+    // Beginning of msg in packet
+    inline const uint8_t *msg_begin() {
+        return name_end();
+    }
+
+    // End of name in packet
+    inline const uint8_t *msg_end() {
+        return msg_begin() + m_hdr_ptr->get_msg_len();
+    }
+
+    // Beginning of packet
+    inline const uint8_t *begin() {
         return &m_raw[0];
     }
 
-    const uint8_t *end() {
+    // End of packet
+    inline const uint8_t *end() {
         return &m_raw[0] + (sizeof(msg_hdr_t) + m_hdr_ptr->get_name_len() + m_hdr_ptr->get_msg_len() );
     }
 
@@ -359,15 +400,16 @@ std::string::const_iterator push_single_packet (
     std::string::const_iterator msg_end, 
     std::vector<uint8_t> &out_vec
 ) {
-    // Length of message of packet
+    
     // It is responsibility of caller, to check if message of appropriate size for 1 packet
     // As packet class is responsible for creating single packet
     // Yet multiple packets are needed for the caller
-    std::string::size_type packet_msg_len = std::min(msg_end - msg_begin, 
-        static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
+    // CHANGE: But it makes code easier if larger range is given to packet
+    // It is up to packet to take enough data, and just leave the rest
+    // And the caller can just get size of data taken, and move pointer
     
     // Create packet
-    msg_packet_t packet(name, msg_begin, msg_begin + packet_msg_len);
+    msg_packet_t packet(name, msg_begin, msg_end);
 
     // The code below is left just for sake of practice of using static_assert
     // Yet arguably, does header-packet has endianness? Is it considered multi-byte entity?
@@ -390,7 +432,7 @@ std::string::const_iterator push_single_packet (
         
     }
 
-    return msg_begin + packet_msg_len;
+    return msg_begin + packet.get_msg_len();
 }
 
 std::vector<uint8_t>::const_iterator parse_single_packet (
