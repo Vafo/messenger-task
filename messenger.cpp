@@ -140,6 +140,12 @@ public:
     msg_hdr_t(): m_hdr() { } // Will it fill m_hdr (array type) with zeroes?
 
     msg_hdr_t(uint8_t name_len, uint8_t msg_len) {
+        if(name_len == 0 || name_len > MSGR_NAME_LEN_MAX) 
+            throw std::runtime_error("messenger: msg_hdr_t: invalid name_len");
+
+        if(msg_len == 0 || msg_len > MSGR_MSG_LEN_MAX)
+            throw std::runtime_error("messenger: msg_hdr_t: invalid msg_len");
+
         this->set_flag(FLAG_BITS); // Design defined valid value
         this->set_name_len(name_len);
         this->set_msg_len(msg_len);
@@ -172,9 +178,14 @@ public:
         if (this->get_flag() != FLAG_BITS) throw std::runtime_error("messenger: flag bit is invalid");
 
         // Check if name & msg bits are valid.
-        if(this->get_name_len() == 0) throw std::runtime_error("messenger: name_len bits are empty");
-        
-        if(this->get_msg_len() == 0) throw std::runtime_error("messenger: msg_len bits are empty");
+        uint8_t name_len = this->get_name_len();
+        uint8_t msg_len = this->get_msg_len();
+
+        if(name_len == 0 || name_len > MSGR_NAME_LEN_MAX) 
+            throw std::runtime_error("messenger: msg_hdr_t: invalid name_len");
+
+        if(msg_len == 0 || msg_len > MSGR_MSG_LEN_MAX)
+            throw std::runtime_error("messenger: msg_hdr_t: invalid msg_len");
 
     }
 
@@ -280,12 +291,6 @@ public:
 
         std::string::size_type packet_msg_len = std::min(msg_end - msg_beg, 
             static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
-
-        if(packet_msg_len <= 0) 
-            throw std::runtime_error("messenger: msg_packet_t: msg of inappropriate length is passed");
-
-        if(name.empty() || name.size() > MSGR_NAME_LEN_MAX)
-            throw std::runtime_error("messenger: msg_packet_t: name of inappropriate length is passed");
 
         *m_hdr_ptr = msg_hdr_t(name.size(), packet_msg_len);
         
