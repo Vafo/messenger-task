@@ -56,21 +56,12 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
     std::string &out_text
 );
 
-// For loop of string, calculating crc4 and placing into uint8_t buffer
-uint8_t calc_crc4_and_copy(
-    uint8_t start_crc4, 
+// Copy from string to uint8_t buffer
+uint8_t *copy_string_to_buf(
     std::string::const_iterator str_beg, 
     std::string::const_iterator str_end, 
     uint8_t * const buf_beg, 
     uint8_t * const buf_end
-);
-
-// For loop of string, calculating crc4 and pushing into out_vector
-uint8_t calc_crc4_and_push(
-    uint8_t start_crc4, 
-    std::string::const_iterator str_beg, 
-    std::string::const_iterator str_end, 
-    std::vector<uint8_t> &out_vec
 );
 
 } // namespace detail
@@ -140,15 +131,13 @@ public:
     msg_hdr_t(): m_hdr() { } // Will it fill m_hdr (array type) with zeroes?
 
     msg_hdr_t(uint8_t name_len, uint8_t msg_len) {
-        if(name_len == 0 || name_len > MSGR_NAME_LEN_MAX) 
-            throw std::runtime_error("messenger: msg_hdr_t: invalid name_len");
-
-        if(msg_len == 0 || msg_len > MSGR_MSG_LEN_MAX)
-            throw std::runtime_error("messenger: msg_hdr_t: invalid msg_len");
+        // Check lengths
+        this->check_valid_len(name_len, msg_len);
 
         this->set_flag(FLAG_BITS); // Design defined valid value
         this->set_name_len(name_len);
         this->set_msg_len(msg_len);
+
     }
 
     // Copy constructor with modification
@@ -163,6 +152,10 @@ public:
             throw std::runtime_error("messenger: msg_hdr_t: constructor received inappropriate range");
 
         std::copy(beg, end, &m_hdr[0]);
+        
+        // Check validity
+        // We can check only flag, as buffer has already packed name & msg len bits
+        this->check_valid_flag();
     }
     
     msg_hdr_t(
@@ -174,19 +167,9 @@ public:
 
         std::copy(beg, end, &m_hdr[0]);
 
-        // Check if flag is valid
-        if (this->get_flag() != FLAG_BITS) throw std::runtime_error("messenger: flag bit is invalid");
-
-        // Check if name & msg bits are valid.
-        uint8_t name_len = this->get_name_len();
-        uint8_t msg_len = this->get_msg_len();
-
-        if(name_len == 0 || name_len > MSGR_NAME_LEN_MAX) 
-            throw std::runtime_error("messenger: msg_hdr_t: invalid name_len");
-
-        if(msg_len == 0 || msg_len > MSGR_MSG_LEN_MAX)
-            throw std::runtime_error("messenger: msg_hdr_t: invalid msg_len");
-
+        // Check validity
+        // We can check only flag, as buffer has already packed name & msg len bits
+        this->check_valid_flag();
     }
 
     const uint8_t *begin() const{
@@ -264,6 +247,21 @@ private:
         this->m_hdr[1] |= (crc4_val & MASK_FIRST_N(MSGR_CRC4_BITS)) << (MSGR_MSG_LEN_BITS - 1);
     }
 
+    // Check if bit fields within packet are valid
+    inline void check_valid_len(uint8_t name_len, uint8_t msg_len) {
+        // Check if name & msg size are valid.
+        if(name_len == 0 || name_len > MSGR_NAME_LEN_MAX) 
+            throw std::runtime_error("messenger: msg_hdr_t: invalid name_len");
+
+        if(msg_len == 0 || msg_len > MSGR_MSG_LEN_MAX)
+            throw std::runtime_error("messenger: msg_hdr_t: invalid msg_len");
+    }
+
+    inline void check_valid_flag() {
+        // Check if flag is valid
+            if (this->get_flag() != FLAG_BITS) throw std::runtime_error("messenger: flag bit is invalid");
+    }
+
 };
 
 
@@ -291,21 +289,16 @@ public:
 
         std::string::size_type packet_msg_len = std::min(msg_end - msg_beg, 
             static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
-
-        *m_hdr_ptr = msg_hdr_t(name.size(), packet_msg_len);
         
-        uint8_t crc4_res = 0;
-        crc4_res = m_hdr_ptr->calculate_crc4(); // Calculate crc4, masking crc4 bits with zeroes
+        // Initialize header 
+        *m_hdr_ptr = msg_hdr_t(name.size(), packet_msg_len);
 
         uint8_t *m_raw_iter = &m_raw[sizeof(msg_hdr_t)];
+        // Copy name & msg
+        this->copy_into_name_and_msg(name, msg_beg, msg_end);
 
-        // Calculate crc4 and push name part of packet
-        crc4_res = calc_crc4_and_copy(crc4_res, name.begin(), name.end(), /* out */ m_raw_iter, m_raw + ARR_LEN(m_raw));
-        m_raw_iter += name.size();
-
-        // Calculate crc4 and push text part of packet
-        crc4_res = calc_crc4_and_copy(crc4_res, msg_beg, msg_beg + packet_msg_len, /* out */ m_raw_iter, m_raw + ARR_LEN(m_raw));
-        m_raw_iter += packet_msg_len;
+        // Calculate crc4
+        uint8_t crc4_res = this->calculate_crc4();
 
         // Place header into packet with calculated crc4
         *m_hdr_ptr = msg_hdr_t(*m_hdr_ptr, crc4_res);
@@ -331,35 +324,16 @@ public:
         // Is it guaranteed that vector has always byte elements? Maybe increment in other way?
         buf_iter += sizeof(msg_hdr_t);
 
+        // Copy name and msg from buffer
+        this->copy_into_name_and_msg(buf_iter, buf_end);
 
         // Validate crc4
         uint8_t crc4_packet = m_hdr_ptr->get_crc4(); // CRC4 retrieved from packet
-        uint8_t crc4_real = m_hdr_ptr->calculate_crc4(); // CRC4 calculated from packet
-
-        // Retreive remaining bytes within packet
-        std::vector<uint8_t>::size_type remaining_bytes = m_hdr_ptr->get_name_len(); // Casts to size_type
-        remaining_bytes += m_hdr_ptr->get_msg_len();
-
-        // Check if the remaining bytes of packet do not exceed actual size of buffer
-        if(remaining_bytes > (buf_end - buf_iter))
-            throw std::runtime_error("messenger: msg_packet_t: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
-
-        if(remaining_bytes > (ARR_LEN(m_raw) - sizeof(msg_hdr_t)) ) // Impossible, due to max vals of flags
-            throw std::runtime_error("messenger: msg_packet_t: indicated name & msg size exceeds packet size");
-
-        // Copy name & msg
-        std::copy(buf_iter, buf_iter + remaining_bytes, &m_raw[sizeof(msg_hdr_t)]);
-
-        // Calculate crc4 of name and text parts of packet.
-        for(std::vector<uint8_t>::const_iterator crc4_iter = buf_iter;
-            crc4_iter != buf_iter + remaining_bytes; crc4_iter++) {
-            crc4_real = util::crc4(crc4_real, *crc4_iter, BITS_PER_BYTE);
-        }
+        uint8_t crc4_real = this->calculate_crc4();
 
         if(crc4_real != crc4_packet) {
-            throw std::runtime_error("Invalid CRC4");
+            throw std::runtime_error("messenger: msg_packet_t: invalid CRC4");
         }
-        
     }
 
     // Are getters for name & msg len redundant?
@@ -402,12 +376,87 @@ public:
         return &m_raw[0] + (sizeof(msg_hdr_t) + m_hdr_ptr->get_name_len() + m_hdr_ptr->get_msg_len() );
     }
 
+private:
+    /**
+     * Helper func to copy name & msg from name string and msg range
+     * 
+     * @param name sender's name
+     * @param msg_beg start of message
+     * @param msg_end end of message
+     * 
+     * @note suffix of message maybe ignored due to max size of packet
+    */
+    void copy_into_name_and_msg(
+        const std::string &name,
+        std::string::const_iterator msg_beg,
+        std::string::const_iterator msg_end
+    ) {
+        uint8_t *buf_iter = &m_raw[sizeof(msg_hdr_t)];
+        uint8_t *buf_end = &m_raw[0] + ARR_LEN(m_raw);
+
+        // Check if wrong name/msg are passed
+        if(m_hdr_ptr->get_name_len() != name.size()) 
+            throw std::runtime_error("messenger: msg_packet_t: actual name size is not equal to indicated name size");
+
+        size_t size_to_copy = m_hdr_ptr->get_msg_len();
+        if(size_to_copy > (msg_end - msg_beg) )
+            throw std::runtime_error("messenger: msg_packet_t: actual message size is less than indicated message size");
+
+        // Copy name
+        buf_iter = copy_string_to_buf(name.cbegin(), name.cend(), buf_iter, buf_end);
+        // Copy msg
+        buf_iter = copy_string_to_buf(msg_beg, msg_beg + size_to_copy, buf_iter, buf_end);
+
+    }
+
+    /**
+     * Helper func to copy name & msg from vector buffer
+     * 
+     * @param buf_beg beginning of buffer
+     * @param buf_end end of buffer
+     * 
+     * @note suffix of buffer maybe ignored due to limited sizes of name and message, defined in header
+    */
+    void copy_into_name_and_msg(
+        std::vector<uint8_t>::const_iterator buf_beg,
+        std::vector<uint8_t>::const_iterator buf_end
+    ) {
+        // Retreive remaining bytes within packet
+        std::vector<uint8_t>::size_type remaining_bytes = m_hdr_ptr->get_name_len(); // Casts to size_type
+        remaining_bytes += m_hdr_ptr->get_msg_len();
+
+        // Check if the remaining bytes of packet do not exceed actual size of buffer
+        if(remaining_bytes > (buf_end - buf_beg))
+            throw std::runtime_error("messenger: msg_packet_t: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
+
+        if(remaining_bytes > (ARR_LEN(m_raw) - sizeof(msg_hdr_t)) ) // Impossible to happen, due to max vals of flags
+            throw std::runtime_error("messenger: msg_packet_t: indicated name & msg size exceeds packet size");
+
+        // [buf_beg, buf_beg + remaining_bytes] range's size is within [buf_beg, buf_end] and m_raw
+        std::copy(buf_beg, buf_beg + remaining_bytes, &m_raw[sizeof(msg_hdr_t)]);
+    }
+
+    // Calculate crc4 of packet
+    uint8_t calculate_crc4() {
+        // Starting crc4
+        uint8_t crc4_res = m_hdr_ptr->calculate_crc4();
+
+        const uint8_t *crc4_iter = &m_raw[sizeof(msg_hdr_t)];
+        const uint8_t *crc4_iter_end = crc4_iter + (m_hdr_ptr->get_name_len() + m_hdr_ptr->get_msg_len());
+
+        // Calculate crc4 of name and text parts of packet.
+        for( ; crc4_iter != crc4_iter_end; crc4_iter++) {
+            crc4_res = util::crc4(crc4_res, *crc4_iter, BITS_PER_BYTE);
+        }
+        
+        return crc4_res;
+    }
+
 };
 
-
-// For loop of string, calculating crc4 and placing into uint8_t buffer
-uint8_t calc_crc4_and_copy(
-    uint8_t start_crc4, 
+// Copy from string to buffer of uint8_t elements
+// checks if string can fit buffer
+uint8_t *copy_string_to_buf(
     std::string::const_iterator str_beg, 
     std::string::const_iterator str_end, 
     uint8_t * const buf_beg, 
@@ -416,39 +465,15 @@ uint8_t calc_crc4_and_copy(
     if(buf_beg == NULL || buf_end == NULL)
         throw std::runtime_error("messenger: calc_crc4_and_push: buf pointer(s) is(are) NULL");
 
+    // Check if buffer can hold given string
     if( (buf_end - buf_beg) < (str_end - str_beg) )
         throw std::runtime_error("messenger: calc_crc4_and_push: string does not fit into buffer");
 
-    uint8_t *buf_iter = buf_beg;
+    std::copy(str_beg, str_end, buf_beg);
 
-    for(std::string::const_iterator iter = str_beg;
-        iter != str_end && buf_iter != buf_end; 
-        iter++) {
-        start_crc4 = util::crc4(start_crc4, *iter, BITS_PER_BYTE);
-        *buf_iter++ = *iter;
-    }
-
-    return start_crc4;
+    // Return shifted iterator within buffer
+    return buf_beg + (str_end - str_beg);
 }
-
-// For loop of string, calculating crc4 and pushing into out_vector
-uint8_t calc_crc4_and_push(
-    uint8_t start_crc4, 
-    std::string::const_iterator str_beg, 
-    std::string::const_iterator str_end, 
-    std::vector<uint8_t> &out_vec
-) {
-
-    for(std::string::const_iterator iter = str_beg;
-        iter != str_end; 
-        iter++) {
-        start_crc4 = util::crc4(start_crc4, *iter, BITS_PER_BYTE);
-        out_vec.push_back( static_cast<uint8_t>(*iter) );
-    }
-
-    return start_crc4;
-}
-
 
 std::string::const_iterator push_single_packet (
     const std::string &name, 
