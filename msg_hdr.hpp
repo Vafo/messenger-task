@@ -23,7 +23,7 @@
 namespace messenger::detail {
 
 class msg_hdr_view_t {
-// Should namespace or class be used for very small funcs?
+
 public:
     typedef uint8_t hdr_raw_t[2];
 protected:
@@ -46,8 +46,8 @@ public:
     }
 
     inline uint8_t get_msg_len() {
-        uint8_t res = ((*m_hdr)[0] >> (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)) & 1;
-        return res | (((*m_hdr)[1] & MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1)) << 1)  ;
+        uint8_t res = ((*m_hdr)[0] >> (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)) & 1;   // first bit is in first byte
+        return res | (((*m_hdr)[1] & MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1)) << 1)  ;  // first bit | rest of bits
     }
 
     inline uint8_t get_crc4() {

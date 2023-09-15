@@ -7,78 +7,6 @@
 
 namespace messenger {
 
-// namespace detail declaration
-namespace detail {
-
-// Push sequentially single packet from stream of text 
-std::string::const_iterator push_single_packet (
-    const std::string &name, 
-    std::string::const_iterator msg_begin, 
-    std::string::const_iterator msg_end, 
-    std::vector<uint8_t> &out_vec
-);
-
-std::vector<uint8_t>::const_iterator parse_single_packet (
-    std::vector<uint8_t>::const_iterator buf_beg,
-    std::vector<uint8_t>::const_iterator buf_end,
-    std::string &out_name,
-    std::string &out_text
-);
-
-} // namespace detail
-
-
-std::vector<uint8_t> make_buff(const msg_t & msg) {
-    // Interface logic: Text and name cant be empty
-    if(msg.name.empty()) throw std::length_error("messenger: name is empty");
-
-    if(msg.name.size() > MSGR_NAME_LEN_MAX) throw std::length_error("messenger: name is too long");
-
-    if(msg.text.empty()) throw std::length_error("messenger: text is empty");
-
-    // Vector to store result of func
-    std::vector<uint8_t> res;
-
-    // As packet has limit on text size, divide text to several packets
-    std::string::const_iterator next_text_pos = msg.text.begin();
-    while(next_text_pos != msg.text.cend())
-        next_text_pos = detail::push_single_packet(msg.name, next_text_pos, msg.text.cend(), /* out */ res);
-
-    return res;
-}
-
-// Function is not recoverable.
-// Once discrepancy is found, previously parsed packets can not be retrieved
-msg_t parse_buff(std::vector<uint8_t> & buff) {
-    std::string msg_name;
-    std::string msg_text;
-    bool is_name_retrieved = false;
-
-    // Parse every packet
-    std::vector<uint8_t>::const_iterator cur_iter = buff.begin();
-    while(cur_iter != buff.end()) {
-        std::string tmp_name;
-        std::string tmp_text;
-
-        // Throws runtime_error on: Invalid CRC4, invalid buff length to construct packet
-        cur_iter = detail::parse_single_packet(cur_iter, buff.cend(), tmp_name, tmp_text);
-
-        // Check if name persists across packets
-        if(!is_name_retrieved) {
-            msg_name = std::move(tmp_name);
-            is_name_retrieved = true;
-        } else if(msg_name != tmp_name) {
-            throw std::runtime_error("messenger: sender names do not match accross packets");
-        }
-
-        // Add retrieved text
-        msg_text += tmp_text;
-    }
-
-    return msg_t(msg_name, msg_text);
-}
-
-
 /**
  * Covers details of operation
 */
@@ -111,11 +39,12 @@ public:
         std::string::size_type packet_msg_len = std::min(msg_end - msg_beg, 
             static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
 
+        // Get to beginning of name field
         uint8_t *m_raw_iter = &m_raw[sizeof(msg_hdr_view_t::hdr_raw_t)];
         
         // Copy name into packet
         std::copy(name.cbegin(), name.cend(), m_raw_iter);
-        m_raw_iter += name.size();
+        m_raw_iter += name.size(); // Move to beginning of msg field
         // Copy msg into packet
         std::copy(msg_beg, msg_beg + packet_msg_len, m_raw_iter);
 
@@ -153,7 +82,6 @@ public:
         
         assertm(packet_size <= ARR_LEN(m_raw), "msg_packet_t: packet size is falsely larger");
         std::copy(buf_beg, buf_beg + packet_size, m_raw);
-
     }
 
     std::string name() {
@@ -186,68 +114,6 @@ public:
         return end() - begin();
     }
 
-private:
-    // /**
-    //  * Helper func to copy name & msg from name string and msg range
-    //  * 
-    //  * @param name sender's name
-    //  * @param msg_beg start of message
-    //  * @param msg_end end of message
-    //  * 
-    //  * @note suffix of message maybe ignored due to max size of packet
-    // */
-    // void copy_into_name_and_msg(
-    //     const std::string &name,
-    //     std::string::const_iterator msg_beg,
-    //     std::string::const_iterator msg_end
-    // ) {
-    //     uint8_t *buf_iter = &m_raw[sizeof(msg_hdr_t)];
-    //     uint8_t *buf_end = &m_raw[0] + ARR_LEN(m_raw);
-
-    //     // Check if wrong name/msg are passed
-    //     // TODO: Change to assert
-    //     if(m_hdr_ptr->get_name_len() != name.size()) 
-    //         throw std::runtime_error("messenger: msg_packet_t: actual name size is not equal to indicated name size");
-
-    //     // TODO: Change to assert
-    //     size_t size_to_copy = m_hdr_ptr->get_msg_len();
-    //     if(size_to_copy > (msg_end - msg_beg) )
-    //         throw std::runtime_error("messenger: msg_packet_t: actual message size is less than indicated message size");
-
-    //     // Copy name
-    //     buf_iter = util::copy_string_to_buf(name.cbegin(), name.cend(), buf_iter, buf_end);
-    //     // Copy msg
-    //     buf_iter = util::copy_string_to_buf(msg_beg, msg_beg + size_to_copy, buf_iter, buf_end);
-
-    // }
-
-    // /**
-    //  * Helper func to copy name & msg from vector buffer
-    //  * 
-    //  * @param buf_beg beginning of buffer
-    //  * @param buf_end end of buffer
-    //  * 
-    //  * @note suffix of buffer maybe ignored due to limited sizes of name and message, defined in header
-    // */
-    // void copy_into_name_and_msg(
-    //     std::vector<uint8_t>::const_iterator buf_beg,
-    //     std::vector<uint8_t>::const_iterator buf_end
-    // ) {
-    //     // Retreive remaining bytes within packet
-    //     std::vector<uint8_t>::size_type remaining_bytes = m_hdr_ptr->get_name_len(); // Casts to size_type
-    //     remaining_bytes += m_hdr_ptr->get_msg_len();
-
-    //     // Check if the remaining bytes of packet do not exceed actual size of buffer
-    //     if(remaining_bytes > (buf_end - buf_beg))
-    //         throw std::runtime_error("messenger: msg_packet_t: invalid name_len / msg_len fields. Indicated size exceeds actual size of buffer");
-
-    //     if(remaining_bytes > (ARR_LEN(m_raw) - sizeof(msg_hdr_t)) ) // Impossible to happen, due to max vals of flags
-    //         throw std::runtime_error("messenger: msg_packet_t: indicated name & msg size exceeds packet size");
-
-    //     // [buf_beg, buf_beg + remaining_bytes] range's size is within [buf_beg, buf_end] and m_raw
-    //     std::copy(buf_beg, buf_beg + remaining_bytes, &m_raw[sizeof(msg_hdr_t)]);
-    // }
-
 };
 
 std::string::const_iterator push_single_packet (
@@ -274,16 +140,64 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
     std::string &out_text
 ) {
     if( (buf_end - buf_beg) < sizeof(msg_hdr_view_t::hdr_raw_t))
-        throw std::runtime_error("messenger: msg_packet_t: buffer does not contain enough bytes for header");
+        throw std::runtime_error("messenger: msg_packet_t: buffer does not contain enough bytes for packet");
 
     msg_packet_t packet(buf_beg, buf_end);
 
     out_name = packet.name();
     out_text = packet.msg();
 
-    return buf_beg + packet.size();
+    return buf_beg + packet.size() /*+ size of whole packet*/;
 }
 
 } // namespace detail
+
+
+std::vector<uint8_t> make_buff(const msg_t & msg) {
+    // Interface logic: Text and name cant be empty
+    if(msg.name.empty()) throw std::length_error("messenger: name is empty");
+
+    if(msg.name.size() > MSGR_NAME_LEN_MAX) throw std::length_error("messenger: name is too long");
+
+    if(msg.text.empty()) throw std::length_error("messenger: text is empty");
+
+
+    std::vector<uint8_t> res;
+    // As packet has limit on text size, divide text to several packets
+    std::string::const_iterator next_text_pos = msg.text.begin();
+    while(next_text_pos != msg.text.cend())
+        next_text_pos = detail::push_single_packet(msg.name, next_text_pos, msg.text.cend(), /* out */ res);
+
+    return res;
+}
+
+msg_t parse_buff(std::vector<uint8_t> & buff) {
+    std::string msg_name;
+    std::string msg_text;
+    bool is_name_retrieved = false;
+
+    // Parse every packet
+    std::vector<uint8_t>::const_iterator cur_iter = buff.begin();
+    while(cur_iter != buff.end()) {
+        std::string tmp_name;
+        std::string tmp_text;
+
+        // Throws runtime_error on: Invalid CRC4, invalid buff length to construct packet
+        cur_iter = detail::parse_single_packet(cur_iter, buff.cend(), tmp_name, tmp_text);
+
+        // Check if name persists across packets
+        if(!is_name_retrieved) {
+            msg_name = std::move(tmp_name);
+            is_name_retrieved = true;
+        } else if(msg_name != tmp_name) {
+            throw std::runtime_error("messenger: sender names do not match accross packets");
+        }
+
+        // Add retrieved text
+        msg_text += tmp_text;
+    }
+
+    return msg_t(msg_name, msg_text);
+}
 
 } // namespace messenger
