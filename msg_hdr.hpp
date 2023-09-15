@@ -121,6 +121,9 @@ public:
 
 };
 
+// Definition of HEADER_SIZE is here, because msg_hdr_view_t::hdr_raw_t is not in scope yet
+const size_t HEADER_SIZE = sizeof(msg_hdr_view_t::hdr_raw_t);
+
 } // namespace messenger::detail
 
 

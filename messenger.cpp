@@ -6,11 +6,9 @@
 #include "msg_hdr.hpp"
 #include "util.hpp"
 
-// Maybe change to using? Problem with namespaces
-#define HEADER_SIZE (sizeof(msg_hdr_view_t::hdr_raw_t))
-#define MAX_PACKET_SIZE (HEADER_SIZE + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX)
-
 namespace messenger {
+
+const size_t MAX_PACKET_SIZE = detail::HEADER_SIZE + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX;
 
 /**
  * Covers details of operation
@@ -135,7 +133,7 @@ std::string::const_iterator push_single_packet (
     std::back_insert_iterator<std::vector<uint8_t>> vec_iter(out_vec);
     std::copy(packet.begin(), packet.end(), vec_iter);
     
-    size_t msg_size_packed = packet.size()/*size of whole packet*/ - name.size() - HEADER_SIZE;
+    size_t msg_size_packed = packet.size()/*size of whole packet*/ - name.size() - detail::HEADER_SIZE;
     return msg_begin + msg_size_packed;
 }
 
@@ -145,7 +143,7 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
     std::string &out_name,
     std::string &out_text
 ) {
-    if( (buf_end - buf_beg) < HEADER_SIZE)
+    if( (buf_end - buf_beg) < detail::HEADER_SIZE)
         throw std::runtime_error("messenger: msg_packet_t: buffer does not contain enough bytes for packet");
 
     msg_packet_t packet(buf_beg, buf_end);
