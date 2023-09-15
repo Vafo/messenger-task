@@ -6,6 +6,7 @@
 #include "msg_hdr.hpp"
 #include "util.hpp"
 
+// Maybe change to using? Problem with namespaces
 #define HEADER_SIZE (sizeof(msg_hdr_view_t::hdr_raw_t))
 #define MAX_PACKET_SIZE (HEADER_SIZE + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX)
 
@@ -66,7 +67,7 @@ public:
         std::vector<uint8_t>::const_iterator buf_end
     ) {
         // Check if buffer has at least enough bytes for header
-        assertm((buf_end - buf_beg) >= sizeof(msg_hdr_view_t::hdr_raw_t), "msg_packet_t: buffer does not contain enough bytes");
+        assertm((buf_end - buf_beg) >= HEADER_SIZE, "msg_packet_t: buffer does not contain enough bytes");
         static_assert(util::endian::native == util::endian::little, "messenger: big endian conversion is not supported");
 
         msg_hdr_view_t buf_hdr_view(buf_beg.base());
@@ -74,7 +75,7 @@ public:
         if(buf_hdr_view.get_flag() != FLAG_BITS)
             throw std::runtime_error("messenger: msg_packet_t: invalid flag bits") ;
 
-        size_t packet_size = sizeof(msg_hdr_view_t::hdr_raw_t) + buf_hdr_view.get_name_len() + buf_hdr_view.get_msg_len();
+        size_t packet_size = HEADER_SIZE + buf_hdr_view.get_name_len() + buf_hdr_view.get_msg_len();
         if(buf_beg + packet_size > buf_end)
             throw std::runtime_error("messenger: msg_packet_t: indicated name & msg size exceeds packet size");
 
