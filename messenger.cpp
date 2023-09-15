@@ -1,9 +1,12 @@
 #include <iostream>
+#include <array>
 #include <cassert>
 
 #include "messenger.hpp"
 #include "msg_hdr.hpp"
 #include "util.hpp"
+
+#define MAX_PACKET_SIZE (sizeof(msg_hdr_view_t::hdr_raw_t) + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX)
 
 namespace messenger {
 
@@ -15,7 +18,8 @@ namespace detail {
 class msg_packet_t {
 
 private:
-    uint8_t m_raw[sizeof(msg_hdr_view_t::hdr_raw_t) + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX];
+    std::array<uint8_t, MAX_PACKET_SIZE> m_raw;
+    using m_raw_iter_t = std::array<uint8_t, MAX_PACKET_SIZE>::iterator;
 public:
     /**
      * Construct packet from name and message
@@ -40,7 +44,7 @@ public:
             static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
 
         // Get to beginning of name field
-        uint8_t *m_raw_iter = &m_raw[sizeof(msg_hdr_view_t::hdr_raw_t)];
+        m_raw_iter_t m_raw_iter = &m_raw[sizeof(msg_hdr_view_t::hdr_raw_t)];
         
         // Copy name into packet
         std::copy(name.cbegin(), name.cend(), m_raw_iter);
@@ -50,7 +54,7 @@ public:
 
 
         // Calculate crc4. Have to set vals of header first, before calculating crc4
-        msg_hdr_mod_t hdr_modifier(&m_raw[0], name.size(), packet_msg_len, 0);
+        msg_hdr_mod_t hdr_modifier(m_raw.begin(), name.size(), packet_msg_len, 0);
         uint8_t crc4_res = util::crc4_packet(begin(), end());
         // Place calculated crc4 in header
         hdr_modifier.set_crc4(crc4_res);
@@ -80,19 +84,19 @@ public:
         if(crc4_real != crc4_packet)
             throw std::runtime_error("messenger: msg_packet_t: invalid CRC4");
         
-        assertm(packet_size <= ARR_LEN(m_raw), "msg_packet_t: packet size is falsely larger");
-        std::copy(buf_beg, buf_beg + packet_size, m_raw);
+        assertm(packet_size <= m_raw.size(), "msg_packet_t: packet size is falsely larger");
+        std::copy(buf_beg, buf_beg + packet_size, m_raw.begin());
     }
 
     std::string name() {
-        msg_hdr_view_t hdr_view(&m_raw[0]);
+        msg_hdr_view_t hdr_view(m_raw.begin());
         const uint8_t *name_beg = begin() + sizeof(msg_hdr_view_t::hdr_raw_t);
 
         return std::string(name_beg, name_beg + hdr_view.get_name_len());
     }
 
     std::string msg() {
-        msg_hdr_view_t hdr_view(&m_raw[0]);
+        msg_hdr_view_t hdr_view(m_raw.begin());
         const uint8_t *msg_beg = begin() + sizeof(msg_hdr_view_t::hdr_raw_t) + hdr_view.get_name_len();
 
         return std::string(msg_beg, msg_beg + hdr_view.get_msg_len());
@@ -100,12 +104,12 @@ public:
 
     // Beginning of packet
     const uint8_t *begin() {
-        return &m_raw[0];
+        return m_raw.begin();
     }
 
     // End of packet
     const uint8_t *end() {
-        msg_hdr_view_t hdr_view(&m_raw[0]);
+        msg_hdr_view_t hdr_view(m_raw.begin());
         return begin() + (sizeof(msg_hdr_view_t::hdr_raw_t) 
                + hdr_view.get_name_len()  + hdr_view.get_msg_len() );
     }
