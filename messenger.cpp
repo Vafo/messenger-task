@@ -45,7 +45,7 @@ public:
             static_cast<std::string::iterator::difference_type>(MSGR_MSG_LEN_MAX) );
 
         // Get to beginning of name field
-        m_raw_iter_t m_raw_iter = &m_raw[sizeof(msg_hdr_view_t::hdr_raw_t)];
+        m_raw_iter_t m_raw_iter = m_raw.begin() + HEADER_SIZE;
         
         // Copy name into packet
         std::copy(name.cbegin(), name.cend(), m_raw_iter);
