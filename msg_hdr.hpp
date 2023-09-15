@@ -99,13 +99,11 @@ public:
         (*m_hdr)[0] |= flag & MASK_FIRST_N(MSGR_FLAG_BITS);
     }
 
-    // Set name_len bits of header
     inline void set_name_len(uint8_t name_len) {
         (*m_hdr)[0] &= ~( MASK_FIRST_N(MSGR_NAME_LEN_BITS) << MSGR_FLAG_BITS );  // Remove prev value of name_len bits
         (*m_hdr)[0] |= (name_len & MASK_FIRST_N(MSGR_NAME_LEN_BITS)) << MSGR_FLAG_BITS;
     }
 
-    // Set msg_len bits of header
     inline void set_msg_len(uint8_t msg_len) {
         (*m_hdr)[0] &= ~(1 << (MSGR_FLAG_BITS + MSGR_NAME_LEN_BITS)); // Remove 1st bit of msg_len in 0th byte
         (*m_hdr)[1] &= ~(MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1 /* exclude 1 from tot */));
@@ -113,7 +111,6 @@ public:
         (*m_hdr)[1] |= (msg_len >> 1) & (MASK_FIRST_N(MSGR_MSG_LEN_BITS - 1));
     }
 
-    // Set crc4 bits of header
     inline void set_crc4(uint8_t crc4_val) {
         (*m_hdr)[1] &= ~(MASK_FIRST_N(MSGR_CRC4_BITS) << (MSGR_MSG_LEN_BITS - 1));
         (*m_hdr)[1] |= (crc4_val & MASK_FIRST_N(MSGR_CRC4_BITS)) << (MSGR_MSG_LEN_BITS - 1);
