@@ -6,7 +6,8 @@
 #include "msg_hdr.hpp"
 #include "util.hpp"
 
-#define MAX_PACKET_SIZE (sizeof(msg_hdr_view_t::hdr_raw_t) + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX)
+#define HEADER_SIZE (sizeof(msg_hdr_view_t::hdr_raw_t))
+#define MAX_PACKET_SIZE (HEADER_SIZE + MSGR_NAME_LEN_MAX + MSGR_MSG_LEN_MAX)
 
 namespace messenger {
 
@@ -90,14 +91,14 @@ public:
 
     std::string name() {
         msg_hdr_view_t hdr_view(m_raw.begin());
-        const uint8_t *name_beg = begin() + sizeof(msg_hdr_view_t::hdr_raw_t);
+        const uint8_t *name_beg = begin() + HEADER_SIZE;
 
         return std::string(name_beg, name_beg + hdr_view.get_name_len());
     }
 
     std::string msg() {
         msg_hdr_view_t hdr_view(m_raw.begin());
-        const uint8_t *msg_beg = begin() + sizeof(msg_hdr_view_t::hdr_raw_t) + hdr_view.get_name_len();
+        const uint8_t *msg_beg = begin() + HEADER_SIZE + hdr_view.get_name_len();
 
         return std::string(msg_beg, msg_beg + hdr_view.get_msg_len());
     }
@@ -110,7 +111,7 @@ public:
     // End of packet
     const uint8_t *end() {
         msg_hdr_view_t hdr_view(m_raw.begin());
-        return begin() + (sizeof(msg_hdr_view_t::hdr_raw_t) 
+        return begin() + (HEADER_SIZE 
                + hdr_view.get_name_len()  + hdr_view.get_msg_len() );
     }
 
@@ -133,7 +134,7 @@ std::string::const_iterator push_single_packet (
     std::back_insert_iterator<std::vector<uint8_t>> vec_iter(out_vec);
     std::copy(packet.begin(), packet.end(), vec_iter);
     
-    size_t msg_size_packed = packet.size()/*size of whole packet*/ - name.size() - sizeof(msg_hdr_view_t::hdr_raw_t);
+    size_t msg_size_packed = packet.size()/*size of whole packet*/ - name.size() - HEADER_SIZE;
     return msg_begin + msg_size_packed;
 }
 
@@ -143,7 +144,7 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
     std::string &out_name,
     std::string &out_text
 ) {
-    if( (buf_end - buf_beg) < sizeof(msg_hdr_view_t::hdr_raw_t))
+    if( (buf_end - buf_beg) < HEADER_SIZE)
         throw std::runtime_error("messenger: msg_packet_t: buffer does not contain enough bytes for packet");
 
     msg_packet_t packet(buf_beg, buf_end);
