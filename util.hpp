@@ -49,14 +49,6 @@ uint8_t crc4(uint8_t c, uint64_t x, size_t bits);
  */
 uint8_t crc4_range(uint8_t c, const uint8_t *beg, const uint8_t *end);
 
-// Copy from string to buffer of uint8_t elements
-uint8_t *copy_string_to_buf(
-    std::string::const_iterator str_beg, 
-    std::string::const_iterator str_end, 
-    uint8_t * const buf_beg, 
-    uint8_t * const buf_end
-);
-
 // Calculate crc4 of packet view
 uint8_t crc4_packet(const uint8_t *beg, const uint8_t *end);
 

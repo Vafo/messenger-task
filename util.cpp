@@ -28,24 +28,6 @@ uint8_t crc4_range(uint8_t c, const uint8_t *beg, const uint8_t *end) {
     return c;
 }
 
-uint8_t *copy_string_to_buf(
-    std::string::const_iterator str_beg, 
-    std::string::const_iterator str_end, 
-    uint8_t * const buf_beg, 
-    uint8_t * const buf_end
-) {
-    assertm(buf_beg != NULL, "messenger: buf_beg is NULL");
-    assertm(buf_end != NULL, "messenger: buf_end is NULL");
-
-    assertm( (buf_end - buf_beg) >= (str_end - str_beg), 
-             "messenger: copy_string_to_buf: string does not fit into buffer" );
-
-    std::copy(str_beg, str_end, buf_beg);
-
-    // Return shifted iterator within buffer
-    return buf_beg + (str_end - str_beg);
-}
-
 uint8_t crc4_packet(const uint8_t *beg, const uint8_t *end) {
     assertm((end - beg) >= sizeof(detail::msg_hdr_view_t::hdr_raw_t), 
             "crc4_packet: packet does not have enough bytes for header");
