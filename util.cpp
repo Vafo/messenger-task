@@ -1,4 +1,5 @@
 #include "util.hpp"
+#include "msg_hdr.hpp"
 
 namespace messenger::util {
 
@@ -18,6 +19,46 @@ uint8_t crc4(uint8_t c, uint64_t x, size_t bits)
     for (i = bits - 4; i >= 0; i -= 4)
         c = crc4_tab[c ^ ((x >> i) & 0xf)];
     return c;
+}
+
+uint8_t crc4_range(uint8_t c, const uint8_t *beg, const uint8_t *end) {
+    for(; beg != end; ++beg)
+        c = crc4(c, *beg, BITS_PER_BYTE);
+    
+    return c;
+}
+
+uint8_t *copy_string_to_buf(
+    std::string::const_iterator str_beg, 
+    std::string::const_iterator str_end, 
+    uint8_t * const buf_beg, 
+    uint8_t * const buf_end
+) {
+    assertm(buf_beg != NULL, "messenger: buf_beg is NULL");
+    assertm(buf_end != NULL, "messenger: buf_end is NULL");
+
+    assertm( (buf_end - buf_beg) >= (str_end - str_beg), 
+             "messenger: copy_string_to_buf: string does not fit into buffer" );
+
+    std::copy(str_beg, str_end, buf_beg);
+
+    // Return shifted iterator within buffer
+    return buf_beg + (str_end - str_beg);
+}
+
+uint8_t crc4_packet(const uint8_t *beg, const uint8_t *end) {
+    assertm((end - beg) >= sizeof(detail::msg_hdr_view_t::hdr_raw_t), 
+            "crc4_packet: packet does not have enough bytes for header");
+
+    detail::msg_hdr_view_t hdr_view(beg);
+    uint8_t crc4_res = hdr_view.calculate_crc4();
+
+    beg += sizeof(detail::msg_hdr_view_t::hdr_raw_t);
+
+    // Calculate crc4 of name and text parts of packet.
+    crc4_res = util::crc4_range(crc4_res, beg, end);
+    
+    return crc4_res;
 }
 
 } // namespace messenger::util

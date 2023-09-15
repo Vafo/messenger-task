@@ -9,6 +9,18 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cassert>
+
+
+#define ARR_LEN(arr) ((sizeof(arr)) / sizeof(arr[0]))
+
+#define BITS_PER_BYTE 8
+
+#define BITS_TO_RANGE(num_bits) (((1 << ((num_bits) - 1)) - 1) | (1 << ((num_bits) - 1)))
+#define MASK_FIRST_N(n) BITS_TO_RANGE(n)
+
+// Assert with message. ref: https://en.cppreference.com/w/cpp/error/assert
+#define assertm(exp, msg) assert(((void)(msg), (exp)))
 
 namespace messenger::util {
     
@@ -26,6 +38,27 @@ namespace messenger::util {
  * Originally taken from https://codebrowser.dev/linux/linux/lib/crc4.c.html
  */
 uint8_t crc4(uint8_t c, uint64_t x, size_t bits);
+
+/**
+ * crc4 - calculate the 4-bit crc of range of bytes.
+ * @c:    starting crc4
+ * @beg:  beginning of range
+ * @end:  end of range
+ *
+ * Returns the crc4 value of range [@beg, @end), using crc4 function.
+ */
+uint8_t crc4_range(uint8_t c, const uint8_t *beg, const uint8_t *end);
+
+// Copy from string to buffer of uint8_t elements
+uint8_t *copy_string_to_buf(
+    std::string::const_iterator str_beg, 
+    std::string::const_iterator str_end, 
+    uint8_t * const buf_beg, 
+    uint8_t * const buf_end
+);
+
+// Calculate crc4 of packet view
+uint8_t crc4_packet(const uint8_t *beg, const uint8_t *end);
 
 /**
  * endian - get endianness of machine
