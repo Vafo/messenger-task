@@ -1,4 +1,7 @@
 #include "util.hpp"
+#include "msg_hdr.hpp"
+
+#define HEADER_SIZE (sizeof(detail::msg_hdr_view_t::hdr_raw_t))
 
 namespace messenger::util {
 
@@ -18,6 +21,28 @@ uint8_t crc4(uint8_t c, uint64_t x, size_t bits)
     for (i = bits - 4; i >= 0; i -= 4)
         c = crc4_tab[c ^ ((x >> i) & 0xf)];
     return c;
+}
+
+uint8_t crc4_range(uint8_t c, const uint8_t *beg, const uint8_t *end) {
+    for(; beg != end; ++beg)
+        c = crc4(c, *beg, BITS_PER_BYTE);
+    
+    return c;
+}
+
+uint8_t crc4_packet(const uint8_t *beg, const uint8_t *end) {
+    assertm((end - beg) >= HEADER_SIZE, 
+            "crc4_packet: packet does not have enough bytes for header");
+
+    detail::msg_hdr_view_t hdr_view(beg);
+    uint8_t crc4_res = hdr_view.calculate_crc4();
+
+    beg += HEADER_SIZE;
+
+    // Calculate crc4 of name and text parts of packet.
+    crc4_res = util::crc4_range(crc4_res, beg, end);
+    
+    return crc4_res;
 }
 
 } // namespace messenger::util
