@@ -60,6 +60,14 @@ public:
         hdr_modifier.set_crc4(crc4_res);
     }
 
+    /**
+     * Construct packet from buffer
+     * 
+     * @param buf_beg buffer's beginning
+     * @param buf_end buffer's end (can exceed single packet)
+     * 
+     * @note first MSGR_MSG_LEN_MAX from message range will be included in packet ignoring rest 
+    */
     msg_packet_t(
         std::vector<uint8_t>::const_iterator buf_beg,
         std::vector<uint8_t>::const_iterator buf_end
