@@ -151,4 +151,50 @@ TEST_CASE("parse_buf: single valid packet", "[parse_buf][normal]") {
     REQUIRE(res_msg.text == "Lorem ipsum");
 }
 
+// 2 valid packets
+TEST_CASE("parse_buf: 2 valid packets", "[parse_buf][normal]") {
+    std::vector<uint8_t> hardcoded_packets = {
+        0xa5, 0x2f, 0x4e, 0x61, 0x6d, 0x65, 0x4c, 0x6f, 
+        0x72, 0x65, 0x6d, 0x20, 0x69, 0x70, 0x73, 0x75, 
+        0x6d, 0x20, 0x6b, 0x65, 0x6b, 0x75, 0x73, 0x20, 
+        0x6d, 0x61, 0x78, 0x69, 0x6d, 0x75, 0x73, 0x20, 
+        0x6e, 0x6f, 0x74, 0x68, 0x69, 0x25, 0x17, 0x4e, 
+        0x61, 0x6d, 0x65, 0x6e, 0x67, 0x20, 0x6d, 0x6f, 
+        0x72, 0x65, 0x20, 0x74, 0x6f, 0x20, 0x73, 0x61, 
+        0x79
+    };
+
+    messenger::msg_t msg("", ""); // No default constructor
+
+    REQUIRE_NOTHROW(msg = messenger::parse_buff(hardcoded_packets));
+
+    REQUIRE( msg.name == "Name" );
+    REQUIRE( msg.text == "Lorem ipsum kekus maximus nothing more to say" );
+
+}
+
+TEST_CASE("parse_buf: multiple valid packets", "[parse_buf][normal]") {
+    const size_t PACKET_NUM = 5;
+    std::string name = "Name";
+    std::string single_text = "ABCDEFGHIJKLMNOPQRSTUVWXY ?/.\'0";
+    std::vector<uint8_t> hardcoded_single_packet = {
+        0xa5, 0x6f, 0x4e, 0x61, 0x6d, 0x65, 0x41, 0x42,
+        0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a,
+        0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x52,
+        0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x20,
+        0x3f, 0x2f, 0x2e, 0x27, 0x30
+    };
+
+    std::vector<uint8_t> input_vec = util::repeat_vector(hardcoded_single_packet, PACKET_NUM);
+    std::string deduced_string = util::repeat_string(single_text, PACKET_NUM);
+
+    messenger::msg_t msg("", ""); // No default constructor
+
+    REQUIRE_NOTHROW(msg = messenger::parse_buff(input_vec));
+
+    REQUIRE(msg.name == name);
+    REQUIRE(msg.text == deduced_string);
+
+}
+
 } // namespace test
