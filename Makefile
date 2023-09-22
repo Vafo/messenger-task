@@ -1,20 +1,25 @@
 TARGET := messenger_app
 TARGET_TEST := messenger_test
 
-TEST_FOLDER := ./test
-BUILD_FOLDER := ./build
+SRC_FOLDER := src
+INCLUDE_FOLDER := ./include ./
+TEST_FOLDER := test
+BUILD_FOLDER := build
+
 
 # Hardcoded SRCS
 SRC := \
-	messenger.cpp \
-	util.cpp  \
+	$(SRC_FOLDER)/messenger.cpp \
+	$(SRC_FOLDER)/util.cpp  \
 
 # Bad way to separate app and test builds...
 # No .o file for reducing build-time
 APP_SRC := \
-	messenger_app.cpp
+	$(SRC) \
+	$(SRC_FOLDER)/messenger_app.cpp
 
 TEST_SRC := \
+	$(SRC) \
 	catch2/catch_amalgamated.cpp \
 	$(TEST_FOLDER)/test_util.cpp \
 	\
@@ -22,18 +27,16 @@ TEST_SRC := \
 	$(TEST_FOLDER)/msg_hdr_test.cpp \
 	$(TEST_FOLDER)/util_test.cpp
 
-APP_OBJS := $(SRC:%.cpp=$(BUILD_FOLDER)/%.o) $(APP_SRC:%.cpp=$(BUILD_FOLDER)/%.o)
-TEST_OBJS := $(SRC:%.cpp=$(BUILD_FOLDER)/%.o) $(TEST_SRC:%.cpp=$(BUILD_FOLDER)/%.o)
+APP_OBJS := $(APP_SRC:%.cpp=$(BUILD_FOLDER)/%.o)
+TEST_OBJS := $(TEST_SRC:%.cpp=$(BUILD_FOLDER)/%.o)
 
-
-INC := \
-	./catch2 
+INC := $(addprefix -I, $(INCLUDE_FOLDER))
 
 CC := g++
 
 $(BUILD_FOLDER)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CC) -c -o $@ $< -I$(INC)
+	$(CC) -c -o $@ $< $(INC)
 
 .PHONY: run test clean
 
