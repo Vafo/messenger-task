@@ -38,7 +38,7 @@ TEST_CASE("msg_hdr_view_t: getters on make_buf", "[msg_hdr_view_t][normal]") {
     REQUIRE_NOTHROW(buf = messenger::make_buff(msg));
 
     // check before declaration 
-    REQUIRE_NOTHROW(messenger::detail::msg_hdr_view_t(buf.data()));
+    REQUIRE_NOTHROW(messenger::detail::msg_hdr_view_t (buf.data()));
     messenger::detail::msg_hdr_view_t hdr_view(buf.data());
 
     REQUIRE(hdr_view.get_flag() == FLAG_BITS);
@@ -74,7 +74,7 @@ TEST_CASE("msg_hdr_mod_t: hardcoded check of setters", "[msg_hdr_mod_t][normal]"
 
     std::array<uint8_t, 2> header;
     // check before declaration
-    REQUIRE_NOTHROW(messenger::detail::msg_hdr_mod_t(header.begin()));
+    REQUIRE_NOTHROW(messenger::detail::msg_hdr_mod_t (header.begin()));
     messenger::detail::msg_hdr_mod_t hdr_mod(header.begin(), name_len, msg_len, crc4);
 
     REQUIRE_THAT(header, Catch::Matchers::RangeEquals(hardcoded_header));
