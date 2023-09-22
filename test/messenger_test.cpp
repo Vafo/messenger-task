@@ -230,7 +230,7 @@ TEST_CASE("parse_buf: non repeating name", "[parse_buf][false]") {
 */
 
 // Empty flag, name_len and msg_len bit fields
-TEST_CASE("make_buf & parse_buf: invalid flag", "[parse_buf][false]") {
+TEST_CASE("make_buf & parse_buf: invalid flag", "[make_buf][parse_buf][false]") {
     const std::string name = "NAMEN";
     const std::string text = "Random.io";
     messenger::msg_t msg(name, text);
