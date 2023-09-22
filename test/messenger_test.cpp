@@ -229,8 +229,10 @@ TEST_CASE("parse_buf: non repeating name", "[parse_buf][false]") {
  * make_buf & parse_buf Unit Tests
 */
 
-// Empty flag, name_len and msg_len bit fields
-TEST_CASE("make_buf & parse_buf: invalid flag", "[make_buf][parse_buf][false]") {
+// Invalid flag, name_len, msg_len and crc4 bit fields
+TEST_CASE("make_buf & parse_buf: invalid bit fields", "[make_buf][parse_buf][false]") {
+    // Consider using Catch Generators
+    // to generate individial and combined cases of invalid bit fields
     const std::string name = "NAMEN";
     const std::string text = "Random.io";
     messenger::msg_t msg(name, text);
@@ -240,11 +242,9 @@ TEST_CASE("make_buf & parse_buf: invalid flag", "[make_buf][parse_buf][false]") 
     messenger::detail::msg_hdr_mod_t hdr_mod(packet.data());
 
     SECTION("null flag bits") {
-        // Nullify flag bits
         hdr_mod.set_flag(0);
         REQUIRE_THROWS(msg = messenger::parse_buff(packet));
     }
-
     SECTION("invalid name_len bits") {
         SECTION("nullify name_len") {
             hdr_mod.set_name_len(0);
@@ -275,6 +275,23 @@ TEST_CASE("make_buf & parse_buf: invalid flag", "[make_buf][parse_buf][false]") 
 
         SECTION("decrement msg_len") {
             hdr_mod.set_msg_len(hdr_mod.get_msg_len() - 1);
+            REQUIRE_THROWS(msg = messenger::parse_buff(packet));
+        }
+    }
+
+    SECTION("invalid crc4 bits") {
+        SECTION("nullify crc4") {
+            hdr_mod.set_crc4(0);
+            REQUIRE_THROWS(msg = messenger::parse_buff(packet));
+        }
+
+        SECTION("increment crc4") {
+            hdr_mod.set_crc4(hdr_mod.get_crc4() + 1);
+            REQUIRE_THROWS(msg = messenger::parse_buff(packet));
+        }
+
+        SECTION("decrement crc4") {
+            hdr_mod.set_crc4(hdr_mod.get_crc4() - 1);
             REQUIRE_THROWS(msg = messenger::parse_buff(packet));
         }
     }
