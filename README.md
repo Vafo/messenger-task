@@ -1,7 +1,12 @@
 ### Messenger Assignment<br>
-To execute using Make, run
+To execute using Make, type
 ```
 make run
+```
+
+To test using Make, type
+```
+make test
 ```
 
 ## Code
