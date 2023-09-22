@@ -35,7 +35,7 @@ public:
         const_cast<hdr_raw_t *>(
             reinterpret_cast<const hdr_raw_t *>(pos)
         )
-    ) { }
+    ) { assertm(pos != NULL, "msg_hdr_view_t: empty pointer is passed"); }
 
     inline uint8_t get_flag() {
         return (*m_hdr)[0] & MASK_FIRST_N(MSGR_FLAG_BITS);
