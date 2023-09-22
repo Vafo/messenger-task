@@ -156,6 +156,9 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
 
     msg_packet_t packet(buf_beg, buf_end);
 
+    if(packet.name().empty()) throw std::length_error("messenger: parse_buf: name is empty");
+    if(packet.msg().empty()) throw std::length_error("messenger: parse_buf: text is empty");
+
     out_name = packet.name();
     out_text = packet.msg();
 
@@ -167,11 +170,11 @@ std::vector<uint8_t>::const_iterator parse_single_packet (
 
 std::vector<uint8_t> make_buff(const msg_t & msg) {
     // Interface logic: Text and name cant be empty
-    if(msg.name.empty()) throw std::length_error("messenger: name is empty");
+    if(msg.name.empty()) throw std::length_error("messenger: make_buf: name is empty");
 
-    if(msg.name.size() > MSGR_NAME_LEN_MAX) throw std::length_error("messenger: name is too long");
+    if(msg.name.size() > MSGR_NAME_LEN_MAX) throw std::length_error("messenger: make_buf: name is too long");
 
-    if(msg.text.empty()) throw std::length_error("messenger: text is empty");
+    if(msg.text.empty()) throw std::length_error("messenger: make_buf: text is empty");
 
 
     std::vector<uint8_t> res;
@@ -190,7 +193,7 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
 
     // Parse every packet
     std::vector<uint8_t>::const_iterator cur_iter = buff.begin();
-    while(cur_iter != buff.end()) {
+    do {
         std::string tmp_name;
         std::string tmp_text;
 
@@ -207,7 +210,7 @@ msg_t parse_buff(std::vector<uint8_t> & buff) {
 
         // Add retrieved text
         msg_text += tmp_text;
-    }
+    } while(cur_iter != buff.end());
 
     return msg_t(msg_name, msg_text);
 }

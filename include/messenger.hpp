@@ -48,6 +48,9 @@ struct msg_t
 		, text(txt)
 	{}
 
+	// Default constructor
+	msg_t() {}
+
 	// Move-like initialization (?)
 	// msg_t(std::string &&nm, std::string &&txt)
 	// 	: name(nm)
