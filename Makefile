@@ -30,13 +30,15 @@ TEST_SRC := \
 APP_OBJS := $(APP_SRC:%.cpp=$(BUILD_FOLDER)/%.o)
 TEST_OBJS := $(TEST_SRC:%.cpp=$(BUILD_FOLDER)/%.o)
 
+APP_DEP := $(APP_OBJS:%.o=%.d)
+TEST_DEP := $(TEST_OBJS:%.o=%.d)
+
+DEP := $(APP_DEP) $(TEST_DEP)
+
 INC := $(addprefix -I, $(INCLUDE_FOLDER))
 
 CC := g++
 
-$(BUILD_FOLDER)/%.o: %.cpp
-	@mkdir -p $(dir $@)
-	$(CC) -c -o $@ $< $(INC)
 
 .PHONY: run test clean
 
@@ -47,6 +49,11 @@ $(TARGET): $(APP_OBJS)
 $(TARGET_TEST): $(TEST_OBJS) 
 	$(CC) $^ -o $@
 
+-include $(DEP)
+
+$(BUILD_FOLDER)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CC) $(INC) -MMD -c $< -o $@ 
 
 run: $(TARGET)
 	./$(TARGET)
