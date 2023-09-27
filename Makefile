@@ -4,7 +4,7 @@ TARGET_TEST := messenger_test
 SRC_FOLDER := src
 INCLUDE_FOLDER := ./include ./
 TEST_FOLDER := test
-BUILD_FOLDER := build
+BUILD_FOLDER := make_build
 
 
 # Hardcoded SRCS
