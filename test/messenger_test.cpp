@@ -1,4 +1,3 @@
-
 // Poor solution to add all prefixes.
 // Need to find way to shorten it and make it independent of code editors
 #include "../catch2/catch_amalgamated.hpp"
@@ -18,15 +17,18 @@ const size_t PACKET_SIZE_MAX = messenger::detail::HEADER_SIZE + MSGR_NAME_LEN_MA
 
 // Single valid packet
 TEST_CASE("make_buf: appropriate name & small msg", "[make_buf][normal]") {    
-    messenger::msg_t msg("Name", "Lorem ipsum");
-    
-    REQUIRE( msg.name == "Name" );
-    REQUIRE( msg.text == "Lorem ipsum" );
+    // Test inputs
+    std::string test_name;
+    std::string test_text;
+    std::vector<uint8_t> hardcoded_res = 
+                         util::hardcoded_packet_max_text(test_name, test_text);
 
+    messenger::msg_t msg(test_name, test_text);
     std::vector<uint8_t> res;
-    std::vector<uint8_t> hardcoded_res = {
-        0xa5, 0xd5, 'N', 'a', 'm', 'e', 'L', 'o', 'r', 'e', 'm', ' ', 'i', 'p', 's', 'u', 'm'
-    };
+    
+    REQUIRE( msg.name == test_name );
+    REQUIRE( msg.text == test_text );
+
 
     REQUIRE_NOTHROW(res = messenger::make_buff(msg));
 
@@ -36,25 +38,21 @@ TEST_CASE("make_buf: appropriate name & small msg", "[make_buf][normal]") {
 // multiple valid packets
 TEST_CASE("make_buf: multiple packets, each having same name & msg", "[make_buf][normal][multiple_packets]") {
     const size_t PACKET_NUM = 5;
-    std::string text_base = "ABCDEFGHIJKLMNOPQRSTUVWXY ?/.\'0"; // Length 31 (NAME_LEN_MAX) (exclude \0 from count)
-    std::vector<uint8_t> hardcoded_single_packet = {
-        0xa5, 0x6f, 'N', 'a', 'm', 'e', 'A', 'B',
-        'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', ' ',
-        '?', '/', '.', '\'', '0'
-    };
+    std::string test_name;
+    std::string test_text;
+    std::vector<uint8_t> hardcoded_single_packet = 
+                         util::hardcoded_packet_max_text(test_name, test_text);
 
-    // Check if text_base has max size
-    REQUIRE(text_base.size() == MSGR_MSG_LEN_MAX);
+    // Check if test_text has max size
+    REQUIRE(test_text.size() == MSGR_MSG_LEN_MAX);
 
-    std::string input_str = util::repeat_string(text_base, PACKET_NUM);
-    messenger::msg_t msg("Name", input_str);
+    std::string input_str = util::repeat_string(test_text, PACKET_NUM);
+    messenger::msg_t msg(test_name, input_str);
 
-    const size_t PACKET_SIZE = messenger::detail::HEADER_SIZE + msg.name.size() + text_base.size();
+    const size_t PACKET_SIZE = messenger::detail::HEADER_SIZE + msg.name.size() + test_text.size();
 
-    REQUIRE(msg.name == "Name");
-    REQUIRE(msg.text.size() == text_base.size() * PACKET_NUM);
+    REQUIRE( msg.name == test_name );
+    REQUIRE( msg.text.size() == test_text.size() * PACKET_NUM );
     REQUIRE( msg.text == input_str );
 
     std::vector<uint8_t> res;
@@ -95,7 +93,6 @@ TEST_CASE("make_buf: empty name & name exceeding NAME_LEN_MAX", "[make_buf][fals
     REQUIRE( msg_long.text == "Lorem ipsum" );
 
     CHECK_THROWS_AS(messenger::make_buff(msg_long), std::length_error);
-    
 }
 
 // Empty message
@@ -115,61 +112,59 @@ TEST_CASE("make_buf: empty msg", "[make_buf][false]") {
 
 // Single valid packet
 TEST_CASE("parse_buf: single valid packet", "[parse_buf][normal]") {
-    std::vector<uint8_t> hardcoded_packet = {
-        0xa5, 0xd5, 'N', 'a', 'm', 'e', 'L', 'o', 'r', 'e', 'm', ' ', 'i', 'p', 's', 'u', 'm'
-    };
-
+    // Test inputs
+    std::string test_name;
+    std::string test_text;
+    std::vector<uint8_t> hardcoded_packet = 
+                         util::hardcoded_packet_short_text(test_name, test_text);
+    
     messenger::msg_t res_msg;
     REQUIRE_NOTHROW(res_msg = messenger::parse_buff(hardcoded_packet));
 
-    REQUIRE(res_msg.name == "Name");
-    REQUIRE(res_msg.text == "Lorem ipsum");
+    REQUIRE(res_msg.name == test_name);
+    REQUIRE(res_msg.text == test_text);
 }
 
 // Multiple packets
 TEST_CASE("parse_buf: multiple valid packets", "[parse_buf][normal]") {
+    // Test inputs
     const size_t PACKET_NUM = 5;
-    std::string name = "Name";
-    std::string single_text = "ABCDEFGHIJKLMNOPQRSTUVWXY ?/.\'0";
-    std::vector<uint8_t> hardcoded_single_packet = {
-        0xa5, 0x6f, 'N', 'a', 'm', 'e', 'A', 'B',
-        'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', ' ',
-        '?', '/', '.', '\'', '0'
-    };
+    std::string test_name;
+    std::string test_text;
+    std::vector<uint8_t> hardcoded_single_packet = 
+                         util::hardcoded_packet_max_text(test_name, test_text);
 
+    // Repeat PACKET_NUM times packet bytes & test_text string
     std::vector<uint8_t> input_vec = util::repeat_vector(hardcoded_single_packet, PACKET_NUM);
-    std::string deduced_string = util::repeat_string(single_text, PACKET_NUM);
+    std::string deduced_string = util::repeat_string(test_text, PACKET_NUM);
 
     messenger::msg_t msg;
 
     REQUIRE_NOTHROW(msg = messenger::parse_buff(input_vec));
 
-    REQUIRE(msg.name == name);
+    REQUIRE(msg.name == test_name);
     REQUIRE(msg.text == deduced_string);
 }
 
 // Invalid crc4
 TEST_CASE("parse_buf: invalid crc4", "[parse_buf][false]") {
-    std::vector<uint8_t> packet = {
-        0xa5, 0x6f, 'N', 'a', 'm', 'e', 'A', 'B',
-        'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', ' ',
-        '?', '/', '.', '\'', '0'
-    };
+    // Test inputs
+    std::string test_name;
+    std::string test_text;
+    std::vector<uint8_t> hardcoded_packet = 
+                         util::hardcoded_packet_max_text(test_name, test_text);
+    
     messenger::msg_t msg;
 
     SECTION("flipping single bit") {
         // Consider using generators to flip bit in range of bytes
-        packet[0] ^= 1;
-        REQUIRE_THROWS(msg = messenger::parse_buff(packet));
+        hardcoded_packet[0] ^= 1;
+        REQUIRE_THROWS(msg = messenger::parse_buff(hardcoded_packet));
     }
 
     SECTION("flipping single byte") {
-        packet[0] ^= 0xFF;
-        REQUIRE_THROWS(msg = messenger::parse_buff(packet));
+        hardcoded_packet[0] ^= 0xFF;
+        REQUIRE_THROWS(msg = messenger::parse_buff(hardcoded_packet));
     }
 
 }
@@ -184,44 +179,41 @@ TEST_CASE("parse_buf: empty buf", "[parse_buf][false]") {
 
 // Trimmed buf
 TEST_CASE("parse_buf: trimmed buf", "[parse_buf][false]") {
-    std::vector<uint8_t> packet = {
-        0xa5, 0x6f, 'N', 'a', 'm', 'e', 'A', 'B',
-        'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', ' ',
-        '?', '/', '.', '\'', '0'
-    };
+    // Test inputs
+    std::string test_name;
+    std::string test_text;
+    std::vector<uint8_t> hardcoded_packet = 
+                         util::hardcoded_packet_max_text(test_name, test_text);
 
-    packet.resize( packet.size() - 1 );
+    hardcoded_packet.resize( hardcoded_packet.size() - 1 );
 
     messenger::msg_t msg;
-    REQUIRE_THROWS(msg = messenger::parse_buff(packet));
+    REQUIRE_THROWS(msg = messenger::parse_buff(hardcoded_packet));
 }
 
 // Non repeating name
 TEST_CASE("parse_buf: non repeating name", "[parse_buf][false]") {
-    std::vector<uint8_t> packet = {
-        0xa5, 0x6f, 'N', 'a', 'm', 'e', 'A', 'B',
-        'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', ' ',
-        '?', '/', '.', '\'', '0'
-    };
-    std::vector<uint8_t> packet_diff = {
-        25, 99, 'V', 'a', 'f', 'o', 'H', 'E',
-        'L', 'O', ' ', 'E', 'V', 'E', 'R', 'D',
-        'A', 'I', 'A', 'N', 'E', '!', '!', '1'
-    };
+    std::string packet1_name;
+    std::string packet1_text;
+    std::vector<uint8_t> packet1 =
+                         util::hardcoded_packet_max_text(packet1_name, packet1_text);
+    
+    std::string packet2_name;
+    std::string packet2_text;
+    std::vector<uint8_t> packet2 =
+                         util::hardcoded_packet_short_text(packet2_name, packet2_text);
+
+    REQUIRE(packet1_name != packet2_name);
 
     messenger::msg_t msg;
     
-    // Make buf by concatenating packet_diff to packet
-    packet.insert(packet.end(), packet_diff.begin(), packet_diff.end());
-    REQUIRE_THROWS(msg = messenger::parse_buff(packet));
+    // Make buf by concatenating packet2 to packet1
+    packet1.insert(packet1.end(), packet2.begin(), packet2.end());
+    REQUIRE_THROWS(msg = messenger::parse_buff(packet1));
 
-    // Make input buf by placing packet_dif | packet | packet_dif
-    packet_diff.insert(packet_diff.end(), packet.begin(), packet.end());
-    REQUIRE_THROWS(msg = messenger::parse_buff(packet_diff));
+    // Make input buf by placing packet2 | packet1 | packet2
+    packet2.insert(packet2.end(), packet1.begin(), packet1.end());
+    REQUIRE_THROWS(msg = messenger::parse_buff(packet2));
 }
 
 
@@ -315,7 +307,6 @@ TEST_CASE("make_buf & parse_buf: appropriate name & large msg, resulting in 2 pa
     REQUIRE( msg.name == parsed_msg.name );
     REQUIRE( msg.text == parsed_msg.text );
 }
-
 
 
 } // namespace test

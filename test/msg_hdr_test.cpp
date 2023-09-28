@@ -3,6 +3,9 @@
 #include "../include/messenger.hpp"
 #include "../include/msg_hdr.hpp"
 
+#include "test_util.hpp"
+
+
 namespace test {
 
 /**
@@ -29,9 +32,13 @@ TEST_CASE("msg_hdr_view_t: getters on hardcoded header", "[msg_hdr_view_t][norma
 }
 
 TEST_CASE("msg_hdr_view_t: getters on make_buf", "[msg_hdr_view_t][normal]") {
-    const std::string name = "Name";
-    const std::string text = "ABCDEFGHIJKLMNOPQRSTUVWXY ?/.\'0";
-    const uint8_t crc4_real = 0x6; // hardcoded known crc4
+    std::string name;
+    std::string text;
+    std::vector<uint8_t> hardcoded_packet = util::hardcoded_packet_max_text(name, text);
+
+    messenger::detail::msg_hdr_view_t hard_view(hardcoded_packet.data());
+
+    const uint8_t crc4_real = hard_view.get_crc4(); // hardcoded known crc4
     messenger::msg_t msg(name, text);
     
     std::vector<uint8_t> buf;
