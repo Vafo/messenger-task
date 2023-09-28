@@ -4,6 +4,9 @@
 #include "../include/msg_hdr.hpp"
 #include "../include/util.hpp"
 
+#include "test_util.hpp"
+
+
 namespace test {
 
 /**
@@ -11,17 +14,13 @@ namespace test {
 */
 
 TEST_CASE("crc4_packet: calculate crc4 from hardcoded packet", "[crc4_packet][normal]") {
-    std::vector<uint8_t> packet = {
-        0xa5, 0x6f /*crc4:0x6*/, 'N', 'a', 'm', 'e', 'A', 'B',
-        'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', ' ',
-        '?', '/', '.', '\'', '0'
-    };
-    const uint8_t crc4_real = 0x6;
+    std::string name;
+    std::string text;
+    std::vector<uint8_t> packet = util::hardcoded_packet_max_text(name, text);
+    messenger::detail::msg_hdr_view_t hdr_view(packet.data());
 
     REQUIRE(
-        crc4_real == messenger::util::crc4_packet(packet.data(), packet.data() + packet.size())
+        hdr_view.get_crc4() == messenger::util::crc4_packet(packet.data(), packet.data() + packet.size())
     );
 }
 
