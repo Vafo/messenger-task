@@ -1,8 +1,8 @@
 #include <catch2/catch_all.hpp>
 
-#include "../include/messenger.hpp"
-#include "../include/msg_hdr.hpp"
-#include "../include/util.hpp"
+#include "messenger.hpp"
+#include "msg_hdr.hpp"
+#include "util.hpp"
 
 #include "test_util.hpp"
 

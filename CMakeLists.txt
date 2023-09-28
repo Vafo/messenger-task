@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.15)
 
 project(Messenger)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_library(compiler_flags INTERFACE)
 target_compile_features(compiler_flags INTERFACE cxx_std_11)
 
@@ -17,6 +19,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(Catch2)
+
 
 # messenger application
 add_executable(messenger_app ${CMAKE_SOURCE_DIR}/src/messenger_app.cpp)

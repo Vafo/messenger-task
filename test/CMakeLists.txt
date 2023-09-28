@@ -1,3 +1,6 @@
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_executable(messenger_test messenger_test.cpp msg_hdr_test.cpp util_test.cpp
                test_util.cpp)
 

@@ -1,8 +1,8 @@
 // Poor solution to add all prefixes.
 // Need to find way to shorten it and make it independent of code editors
 #include <catch2/catch_all.hpp>
-#include "../include/messenger.hpp"
-#include "../include/msg_hdr.hpp"
+#include "messenger.hpp"
+#include "msg_hdr.hpp"
 
 #include "test_util.hpp"
 
