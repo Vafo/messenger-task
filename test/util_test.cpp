@@ -1,4 +1,4 @@
-#include "../catch2/catch_amalgamated.hpp"
+#include <catch2/catch_all.hpp>
 
 #include "../include/messenger.hpp"
 #include "../include/msg_hdr.hpp"
