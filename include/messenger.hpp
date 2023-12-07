@@ -42,10 +42,20 @@ namespace messenger
  */
 struct msg_t
 {
+	// Does it copy-initialize name & text (?) I think no...
 	msg_t(const std::string & nm, const std::string & txt)
 		: name(nm)
 		, text(txt)
 	{}
+
+	// Default constructor
+	msg_t() {}
+
+	// Move-like initialization (?)
+	// msg_t(std::string &&nm, std::string &&txt)
+	// 	: name(nm)
+	// 	, text(txt)
+	// {}
 
 	std::string name;	/**< message sender's name */
 	std::string text;	/**< message text */
@@ -85,6 +95,7 @@ std::vector<uint8_t> make_buff(const msg_t & msg);
 * If their value will be incorrect throw std::runtime_error
 */
 msg_t parse_buff(std::vector<uint8_t> & buff);
+
 
 }	// namespace messenger
 
